@@ -5,11 +5,11 @@ import Foundation
 struct PaperSettings {
     var enabled = true
     var intensity: Double     // 0...1 overlay opacity
-    var textureSize: Double   // tile zoom multiplier
+    var textureSize: Double   // tile edge multiplier (repeat distance)
     var grainSize: Double     // finest speck size in pixels
 
     static let intensityRange = 0.03...0.40
-    static let textureSizeRange = 0.5...4.0
+    static let textureSizeRange = 1.0...12.0
     static let grainSizeRange = 0.9...12.0
 
     init(texture: PaperTexture) {

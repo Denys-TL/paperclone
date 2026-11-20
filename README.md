@@ -7,6 +7,7 @@ display. A local clone of [Paperman](https://paperman.cc/).
 - Transparent, **click-through** overlay (mouse/keyboard pass straight through)
 - "Vellum Mist" paper texture + intensity, texture-size and grain-size sliders
 - Menu-bar only — no Dock icon
+- Texture size sets the tile repeat distance — raise it until the repeat disappears
 - Multi-monitor, static texture, ~0% CPU
 - Native Swift/AppKit, single process, no dependencies
 

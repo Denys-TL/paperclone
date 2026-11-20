@@ -16,6 +16,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var grainSizeValueLabel: NSTextField!
 
     private var overlays: [OverlayWindow] = []
+    private var pattern: NSImage?
+
+    // Tiles larger than this re-render on slider release instead of every drag tick.
+    private let liveRenderMaxPixelEdge = 2560
 
     private let texture = PaperTexture.vellumMist
 
@@ -26,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         buildStatusItem()
         rebuildOverlays()
+        renderPattern()
         applyToAll()
 
         NotificationCenter.default.addObserver(
@@ -175,14 +180,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func textureSizeChanged(_ sender: NSSlider) {
         settings.textureSize = sender.doubleValue
         textureSizeValueLabel?.stringValue = textureSizeString()
-        settings.save()
-        applyToAll()
+        textureShapeChanged()
     }
 
     @objc private func grainSizeChanged(_ sender: NSSlider) {
         settings.grainSize = sender.doubleValue
         grainSizeValueLabel?.stringValue = grainSizeString()
+        textureShapeChanged()
+    }
+
+    private func textureShapeChanged() {
+        let dragging = NSApp.currentEvent?.type == .leftMouseDragged
+        if dragging && PaperTextureRenderer.pixelEdge(for: settings) > liveRenderMaxPixelEdge { return }
         settings.save()
+        renderPattern()
         applyToAll()
     }
 
@@ -193,6 +204,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         textureSizeValueLabel.stringValue = textureSizeString()
         grainSizeValueLabel.stringValue = grainSizeString()
         settings.save()
+        renderPattern()
         applyToAll()
     }
 
@@ -212,8 +224,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         overlays = NSScreen.screens.map { OverlayWindow(screen: $0) }
     }
 
+    private func renderPattern() {
+        pattern = PaperTextureRenderer.tile(for: texture, settings: settings)   // render once, share across displays
+    }
+
     private func applyToAll() {
-        let pattern = PaperTextureRenderer.tile(for: texture, settings: settings)   // render once, share across displays
+        guard let pattern else { return }
         for overlay in overlays {
             overlay.apply(patternImage: pattern, intensity: settings.intensity)
             overlay.setVisible(settings.enabled)

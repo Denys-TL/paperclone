@@ -3,17 +3,21 @@ import AppKit
 /// Renders a paper-texture preset into a small, seamlessly-tiling `NSImage`
 /// entirely on the CPU — no WebKit. The grain is fractal value-noise (fBm),
 /// multiplied by the preset tint and baked into an opaque bitmap. Because the
-/// overlay is static, this runs only when the preset changes (a few ms), so
+/// overlay is static, this runs only when the settings change (a few ms), so
 /// there's no per-frame cost and no helper processes.
 enum PaperTextureRenderer {
 
+    /// Bitmap edge in pixels: a larger texture size means a longer repeat distance.
+    static func pixelEdge(for settings: PaperSettings) -> Int {
+        Int((320 * settings.textureSize).rounded())
+    }
+
     /// A tileable RGBA tile for `texture`, shaped by `settings` (grain size,
-    /// texture size). `pixelSize` is the bitmap edge in pixels; `scale` maps it
-    /// to points (2 → crisp on Retina).
+    /// texture size). `scale` maps pixels to points (2 → crisp on Retina).
     static func tile(for texture: PaperTexture,
                      settings: PaperSettings,
-                     pixelSize n: Int = 320,
                      scale: CGFloat = 2) -> NSImage {
+        let n = pixelEdge(for: settings)
         let octaves = max(1, texture.numOctaves)
 
         // 1/grainSize ≈ cycles/pixel (SVG feTurbulence convention): it sets the
@@ -41,7 +45,10 @@ enum PaperTextureRenderer {
         let tintB = Double(texture.tintB) / 255.0
 
         var pixels = [UInt8](repeating: 0, count: n * n * 4)
-        for y in 0..<n {
+        pixels.withUnsafeMutableBufferPointer { buffer in
+        let pixels = buffer
+        // Rows are independent, so render them across all cores.
+        DispatchQueue.concurrentPerform(iterations: n) { y in
             let v = Double(y) / Double(n)
             for x in 0..<n {
                 let u = Double(x) / Double(n)
@@ -59,6 +66,7 @@ enum PaperTextureRenderer {
                 pixels[idx + 3] = 255
             }
         }
+        }
 
         let cs = CGColorSpaceCreateDeviceRGB()
         let ctx = CGContext(data: &pixels,
@@ -67,7 +75,7 @@ enum PaperTextureRenderer {
                             space: cs,
                             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
         let cg = ctx.makeImage()!
-        let pointEdge = CGFloat(n) / scale * CGFloat(settings.textureSize)
+        let pointEdge = CGFloat(n) / scale
         return NSImage(cgImage: cg, size: NSSize(width: pointEdge, height: pointEdge))
     }
 
