@@ -7,16 +7,21 @@ import AppKit
 /// there's no per-frame cost and no helper processes.
 enum PaperTextureRenderer {
 
-    /// A tileable RGBA tile for `texture`. `pixelSize` is the bitmap edge in
-    /// pixels; `scale` maps it to points (2 → crisp on Retina).
-    static func tile(for texture: PaperTexture, pixelSize n: Int = 320, scale: CGFloat = 2) -> NSImage {
+    /// A tileable RGBA tile for `texture`. `grainSize` is the finest speck size
+    /// in pixels; `textureSize` zooms the whole tile. `pixelSize` is the bitmap
+    /// edge in pixels; `scale` maps it to points (2 → crisp on Retina).
+    static func tile(for texture: PaperTexture,
+                     grainSize: Double,
+                     textureSize: Double,
+                     pixelSize n: Int = 320,
+                     scale: CGFloat = 2) -> NSImage {
         let octaves = max(1, texture.numOctaves)
 
-        // baseFrequency ≈ cycles/pixel (SVG feTurbulence convention): it sets the
+        // 1/grainSize ≈ cycles/pixel (SVG feTurbulence convention): it sets the
         // FINEST grain. We build `octaves` bands from coarse → fine, each doubling
         // in frequency and halving in amplitude, so a broad mottle dominates and
         // fine grain rides on top — the way real paper fibre reads.
-        let finest = max(2.0, texture.baseFrequency * Double(n))
+        let finest = max(2.0, Double(n) / max(grainSize, 0.1))
         let coarsest = max(2.0, finest / pow(2.0, Double(octaves - 1)))
 
         var cellsPer = [Int]()
@@ -63,7 +68,7 @@ enum PaperTextureRenderer {
                             space: cs,
                             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
         let cg = ctx.makeImage()!
-        let pointEdge = CGFloat(n) / scale
+        let pointEdge = CGFloat(n) / scale * CGFloat(textureSize)
         return NSImage(cgImage: cg, size: NSSize(width: pointEdge, height: pointEdge))
     }
 

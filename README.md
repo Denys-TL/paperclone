@@ -5,7 +5,7 @@ whole screen — softening contrast and the glossy "light source" feel of the
 display. A local clone of [Paperman](https://paperman.cc/).
 
 - Transparent, **click-through** overlay (mouse/keyboard pass straight through)
-- "Vellum Mist" paper texture + an intensity slider
+- "Vellum Mist" paper texture + intensity, texture-size and grain-size sliders
 - Menu-bar only — no Dock icon
 - Multi-monitor, static texture, ~0% CPU
 - Native Swift/AppKit, single process, no dependencies
