@@ -75,6 +75,7 @@ Sources/
   AppDelegate.swift          menu-bar item, styled menu, overlay lifecycle, prefs
   OverlayWindow.swift        transparent click-through window per display
   PaperTexture.swift         the Vellum Mist texture parameters
+  PaperSettings.swift        user-tunable settings + UserDefaults persistence
   PaperTextureRenderer.swift native fractal-noise texture generator
   Icons.swift                menu-bar icon loading + colour swatches
 Resources/

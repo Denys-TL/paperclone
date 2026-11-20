@@ -1,8 +1,7 @@
 import AppKit
 
 /// Owns the whole app: the menu-bar item + menu, the per-display overlay
-/// windows, and the current state (enabled / intensity / texture size / grain
-/// size), which it persists in
+/// windows, and the current `PaperSettings`, which it persists in
 /// `UserDefaults` and fans out to every overlay. The texture is fixed to
 /// `PaperTexture.vellumMist`.
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -20,25 +19,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private let texture = PaperTexture.vellumMist
 
-    private let defaults = UserDefaults.standard
-    private var enabled = true
-    private var intensity = PaperTexture.vellumMist.defaultOpacity   // 0...1
-
-    private let minIntensity = 0.03
-    private let maxIntensity = 0.40
-
-    private var textureSize = PaperTexture.vellumMist.defaultTextureSize   // tile zoom
-    private var grainSize = PaperTexture.vellumMist.defaultGrainSize       // pixels
-
-    private let minTextureSize = 0.5
-    private let maxTextureSize = 4.0
-    private let minGrainSize = 0.9
-    private let maxGrainSize = 12.0
+    private var settings = PaperSettings.load(texture: .vellumMist)
 
     // MARK: Lifecycle
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        loadPrefs()
         buildStatusItem()
         rebuildOverlays()
         applyToAll()
@@ -48,16 +33,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             selector: #selector(screensChanged),
             name: NSApplication.didChangeScreenParametersNotification,
             object: nil)
-    }
-
-    private func loadPrefs() {
-        if defaults.object(forKey: "enabled") != nil { enabled = defaults.bool(forKey: "enabled") }
-        if defaults.object(forKey: "intensity") != nil { intensity = defaults.double(forKey: "intensity") }
-        intensity = min(max(intensity, minIntensity), maxIntensity)
-        if defaults.object(forKey: "textureSize") != nil { textureSize = defaults.double(forKey: "textureSize") }
-        textureSize = min(max(textureSize, minTextureSize), maxTextureSize)
-        if defaults.object(forKey: "grainSize") != nil { grainSize = defaults.double(forKey: "grainSize") }
-        grainSize = min(max(grainSize, minGrainSize), maxGrainSize)
     }
 
     // MARK: Menu bar
@@ -70,7 +45,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func updateStatusIcon() {
         guard let button = statusItem.button else { return }
-        button.image = Icons.statusBar(enabled: enabled)
+        button.image = Icons.statusBar(enabled: settings.enabled)
         button.toolTip = "PaperClone — paper texture overlay"
     }
 
@@ -91,24 +66,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         toggleItem = NSMenuItem(title: "Enabled", action: #selector(toggleEnabled), keyEquivalent: "")
         toggleItem.target = self
-        toggleItem.state = enabled ? .on : .off
+        toggleItem.state = settings.enabled ? .on : .off
         toggleItem.image = Icons.symbol("power")
         menu.addItem(toggleItem)
 
         let intensityRow = buildSliderRow(title: "Intensity", valueText: percentString(),
-                                          value: intensity, range: minIntensity...maxIntensity,
+                                          value: settings.intensity, range: PaperSettings.intensityRange,
                                           action: #selector(intensityChanged(_:)))
         slider = intensityRow.slider
         intensityValueLabel = intensityRow.valueLabel
 
         let textureSizeRow = buildSliderRow(title: "Texture size", valueText: textureSizeString(),
-                                            value: textureSize, range: minTextureSize...maxTextureSize,
+                                            value: settings.textureSize, range: PaperSettings.textureSizeRange,
                                             action: #selector(textureSizeChanged(_:)))
         textureSizeSlider = textureSizeRow.slider
         textureSizeValueLabel = textureSizeRow.valueLabel
 
         let grainSizeRow = buildSliderRow(title: "Grain size", valueText: grainSizeString(),
-                                          value: grainSize, range: minGrainSize...maxGrainSize,
+                                          value: settings.grainSize, range: PaperSettings.grainSizeRange,
                                           action: #selector(grainSizeChanged(_:)))
         grainSizeSlider = grainSizeRow.slider
         grainSizeValueLabel = grainSizeRow.valueLabel
@@ -135,15 +110,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func percentString() -> String {
-        "\(Int((intensity * 100).rounded()))%"
+        "\(Int((settings.intensity * 100).rounded()))%"
     }
 
     private func textureSizeString() -> String {
-        String(format: "%.1f×", textureSize)
+        String(format: "%.1f×", settings.textureSize)
     }
 
     private func grainSizeString() -> String {
-        String(format: "%.1f px", grainSize)
+        String(format: "%.1f px", settings.grainSize)
     }
 
     private func buildSliderRow(title: String,
@@ -183,43 +158,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: Actions
 
     @objc private func toggleEnabled() {
-        enabled.toggle()
-        toggleItem.state = enabled ? .on : .off
+        settings.enabled.toggle()
+        toggleItem.state = settings.enabled ? .on : .off
         updateStatusIcon()
-        defaults.set(enabled, forKey: "enabled")
-        overlays.forEach { $0.setVisible(enabled) }
+        settings.save()
+        overlays.forEach { $0.setVisible(settings.enabled) }
     }
 
     @objc private func intensityChanged(_ sender: NSSlider) {
-        intensity = sender.doubleValue
+        settings.intensity = sender.doubleValue
         intensityValueLabel?.stringValue = percentString()
-        defaults.set(intensity, forKey: "intensity")
+        settings.save()
         applyToAll()
     }
 
     @objc private func textureSizeChanged(_ sender: NSSlider) {
-        textureSize = sender.doubleValue
+        settings.textureSize = sender.doubleValue
         textureSizeValueLabel?.stringValue = textureSizeString()
-        defaults.set(textureSize, forKey: "textureSize")
+        settings.save()
         applyToAll()
     }
 
     @objc private func grainSizeChanged(_ sender: NSSlider) {
-        grainSize = sender.doubleValue
+        settings.grainSize = sender.doubleValue
         grainSizeValueLabel?.stringValue = grainSizeString()
-        defaults.set(grainSize, forKey: "grainSize")
+        settings.save()
         applyToAll()
     }
 
     @objc private func resetTexture() {
-        textureSize = texture.defaultTextureSize
-        grainSize = texture.defaultGrainSize
-        textureSizeSlider.doubleValue = textureSize
-        grainSizeSlider.doubleValue = grainSize
+        settings.resetTexture(to: texture)
+        textureSizeSlider.doubleValue = settings.textureSize
+        grainSizeSlider.doubleValue = settings.grainSize
         textureSizeValueLabel.stringValue = textureSizeString()
         grainSizeValueLabel.stringValue = grainSizeString()
-        defaults.removeObject(forKey: "textureSize")
-        defaults.removeObject(forKey: "grainSize")
+        settings.save()
         applyToAll()
     }
 
@@ -240,10 +213,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func applyToAll() {
-        let pattern = PaperTextureRenderer.tile(for: texture, grainSize: grainSize, textureSize: textureSize)   // render once, share across displays
+        let pattern = PaperTextureRenderer.tile(for: texture, settings: settings)   // render once, share across displays
         for overlay in overlays {
-            overlay.apply(patternImage: pattern, intensity: intensity)
-            overlay.setVisible(enabled)
+            overlay.apply(patternImage: pattern, intensity: settings.intensity)
+            overlay.setVisible(settings.enabled)
         }
     }
 }
