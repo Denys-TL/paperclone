@@ -33,5 +33,5 @@ struct PaperTexture {
         tintR: 247, tintG: 247, tintB: 249,
         defaultOpacity: 0.12,
         formationScale: 64, defaultFormation: 0.35,
-        fibreLength: 36, defaultFibre: 0.30)
+        fibreLength: 18, defaultFibre: 0.30)
 }

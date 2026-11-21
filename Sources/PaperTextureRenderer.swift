@@ -1,10 +1,10 @@
 import AppKit
 
 /// Renders a paper-texture preset into a small, seamlessly-tiling `NSImage`
-/// entirely on the CPU — no WebKit. Three layers are combined: tooth (fine
-/// fractal value-noise), fibres (stroked strands) and formation (warped clumps
-/// that make the other two denser or sparser). The result is baked as light
-/// and dark specks in the tile's alpha channel, so it textures
+/// entirely on the CPU — no WebKit. Paper is modelled as a height map: tooth
+/// (fine fractal value-noise) plus fibres (stroked strands), made denser or
+/// sparser by formation (warped clumps). The map is embossed — lit from one
+/// corner — and baked as highlights and shadows in the tile's alpha channel, so it textures
 /// what is behind it without veiling it (the wash is a separate layer). Because the
 /// overlay is static, this runs only when the settings change (a few ms), so
 /// there's no per-frame cost and no helper processes.
@@ -50,10 +50,15 @@ enum PaperTextureRenderer {
 
         // Peak speck opacity before the grain-strength setting scales it.
         let grainDepth = 0.85
+        let embossGain = 0.6
+        let fibreRelief = 3.0        // fibres stand this much taller than tooth
+        let formationSwing = 0.4     // density varies ±40% at full formation, never to zero
+        let formationShade = 0.1     // faint brightness share of formation
 
-        var pixels = [UInt8](repeating: 0, count: n * n * 4)
-        pixels.withUnsafeMutableBufferPointer { buffer in
-        let pixels = buffer
+        // Pass 1 — height map: tooth plus raised fibres, made denser or sparser by formation.
+        var heights = [Float](repeating: 0, count: n * n)
+        heights.withUnsafeMutableBufferPointer { buffer in
+        let heights = buffer
         // Rows are independent, so render them across all cores.
         DispatchQueue.concurrentPerform(iterations: n) { y in
             let v = Double(y) / Double(n)
@@ -64,16 +69,34 @@ enum PaperTextureRenderer {
                     val += amps[o] * valueNoise(u, v, cells: cellsPer[o], seed: texture.seed &+ o)
                 }
                 val /= ampSum                              // normalise to [0,1]
-                var signed = 2.0 * val - 1.0               // <0 dark speck, >0 light speck
+                var height = 2.0 * val - 1.0
                 if fibre > 0 {
-                    signed += fibre * (Double(fibres[y * n + x]) - 128.0) / 127.0
+                    height += fibreRelief * fibre * (Double(fibres[y * n + x]) - 128.0) / 127.0
                 }
                 if formation > 0 {
-                    // Mostly denser/sparser texture, only faintly lighter/darker.
-                    let clump = formation * sample(clumps, edge: mapEdge, u, v)
-                    signed = signed * (1.0 + 0.8 * clump) + 0.2 * clump
+                    height *= 1.0 + formationSwing * formation * sample(clumps, edge: mapEdge, u, v)
                 }
-                signed = max(-1.0, min(1.0, signed))
+                heights[y * n + x] = Float(height)
+            }
+        }
+        }
+        let heightMap = heights
+
+        // Pass 2 — emboss: light from one corner, so every bump gets a lit side and
+        // a shaded side instead of being a flat light or dark dot.
+        let reach = max(1, Int((settings.grainSize / 2).rounded()))
+        var pixels = [UInt8](repeating: 0, count: n * n * 4)
+        pixels.withUnsafeMutableBufferPointer { buffer in
+        let pixels = buffer
+        DispatchQueue.concurrentPerform(iterations: n) { y in
+            let lit = ((y + reach) % n) * n
+            for x in 0..<n {
+                var signed = embossGain * Double(heightMap[y * n + x] - heightMap[lit + (x + reach) % n])
+                if formation > 0 {
+                    signed += formationShade * formation
+                        * sample(clumps, edge: mapEdge, Double(x) / Double(n), Double(y) / Double(n))
+                }
+                signed = max(-1.0, min(1.0, signed))       // <0 shaded, >0 lit
                 let alpha = channel(grainDepth * abs(signed))
                 let white = signed > 0 ? alpha : 0         // premultiplied
 
@@ -111,8 +134,8 @@ enum PaperTextureRenderer {
         }
     }
 
-    /// An `n`×`n` grey map (128 = nothing) of randomly oriented, slightly bent
-    /// light and dark strands. Strands crossing an edge are redrawn on the
+    /// An `n`×`n` grey map (128 = flat) of short, randomly oriented, slightly bent
+    /// strands: mostly raised (light), a few grooves (dark). Strands crossing an edge are redrawn on the
     /// opposite side, so the map tiles seamlessly.
     private static func fibreLayer(edge n: Int, length: Double, seed: Int) -> [UInt8] {
         if let cached = fibreCache, cached.edge == n, cached.length == length, cached.seed == seed {
@@ -130,7 +153,7 @@ enum PaperTextureRenderer {
             var rng = SplitMix64(state: UInt64(truncatingIfNeeded: seed) &+ 0xF1B3E5)
             let edge = Double(n)
             let reach = min(length, edge / 2)
-            for _ in 0..<(n * n / 500) {
+            for _ in 0..<(n * n / 250) {
                 let x0 = rng.next() * edge
                 let y0 = rng.next() * edge
                 let angle = rng.next() * 2 * Double.pi
@@ -141,8 +164,8 @@ enum PaperTextureRenderer {
                 let cx = (x0 + x1) / 2 - bend * sin(angle)
                 let cy = (y0 + y1) / 2 + bend * cos(angle)
 
-                ctx.setStrokeColor(gray: rng.next() < 0.5 ? 0 : 1, alpha: 0.35 + 0.4 * rng.next())
-                ctx.setLineWidth(0.8 + 0.8 * rng.next())
+                ctx.setStrokeColor(gray: rng.next() < 0.2 ? 0 : 1, alpha: 0.25 + 0.3 * rng.next())
+                ctx.setLineWidth(1.5 + 1.5 * rng.next())
 
                 let minX = min(x0, x1, cx), maxX = max(x0, x1, cx)
                 let minY = min(y0, y1, cy), maxY = max(y0, y1, cy)
