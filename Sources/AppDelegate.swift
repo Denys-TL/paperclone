@@ -8,8 +8,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var statusItem: NSStatusItem!
     private var toggleItem: NSMenuItem!
-    private var slider: NSSlider!
-    private var intensityValueLabel: NSTextField!
+    private var washValueLabel: NSTextField!
+    private var grainValueLabel: NSTextField!
     private var textureSizeSlider: NSSlider!
     private var textureSizeValueLabel: NSTextField!
     private var grainSizeSlider: NSSlider!
@@ -75,11 +75,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         toggleItem.image = Icons.symbol("power")
         menu.addItem(toggleItem)
 
-        let intensityRow = buildSliderRow(title: "Intensity", valueText: percentString(),
-                                          value: settings.intensity, range: PaperSettings.intensityRange,
-                                          action: #selector(intensityChanged(_:)))
-        slider = intensityRow.slider
-        intensityValueLabel = intensityRow.valueLabel
+        let washRow = buildSliderRow(title: "Wash", valueText: percentString(settings.wash),
+                                     value: settings.wash, range: PaperSettings.washRange,
+                                     action: #selector(washChanged(_:)))
+        washValueLabel = washRow.valueLabel
+
+        let grainRow = buildSliderRow(title: "Grain strength", valueText: percentString(settings.grain),
+                                      value: settings.grain, range: PaperSettings.grainRange,
+                                      action: #selector(grainChanged(_:)))
+        grainValueLabel = grainRow.valueLabel
 
         let textureSizeRow = buildSliderRow(title: "Texture size", valueText: textureSizeString(),
                                             value: settings.textureSize, range: PaperSettings.textureSizeRange,
@@ -93,7 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         grainSizeSlider = grainSizeRow.slider
         grainSizeValueLabel = grainSizeRow.valueLabel
 
-        for row in [intensityRow, textureSizeRow, grainSizeRow] {
+        for row in [washRow, grainRow, textureSizeRow, grainSizeRow] {
             let item = NSMenuItem()
             item.view = row.view
             menu.addItem(item)
@@ -114,8 +118,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return menu
     }
 
-    private func percentString() -> String {
-        "\(Int((settings.intensity * 100).rounded()))%"
+    private func percentString(_ value: Double) -> String {
+        "\(Int((value * 100).rounded()))%"
     }
 
     private func textureSizeString() -> String {
@@ -170,9 +174,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         overlays.forEach { $0.setVisible(settings.enabled) }
     }
 
-    @objc private func intensityChanged(_ sender: NSSlider) {
-        settings.intensity = sender.doubleValue
-        intensityValueLabel?.stringValue = percentString()
+    @objc private func washChanged(_ sender: NSSlider) {
+        settings.wash = sender.doubleValue
+        washValueLabel?.stringValue = percentString(settings.wash)
+        settings.save()
+        applyToAll()
+    }
+
+    @objc private func grainChanged(_ sender: NSSlider) {
+        settings.grain = sender.doubleValue
+        grainValueLabel?.stringValue = percentString(settings.grain)
         settings.save()
         applyToAll()
     }
@@ -231,7 +242,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func applyToAll() {
         guard let pattern else { return }
         for overlay in overlays {
-            overlay.apply(patternImage: pattern, intensity: settings.intensity)
+            overlay.apply(patternImage: pattern, texture: texture, settings: settings)
             overlay.setVisible(settings.enabled)
         }
     }
