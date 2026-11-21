@@ -4,20 +4,24 @@ import AppKit
 /// windows, and the current `PaperSettings`, which it persists in
 /// `UserDefaults` and fans out to every overlay. The texture is fixed to
 /// `PaperTexture.vellumMist`.
+/// One menu slider: which setting it edits, its range, and how to show it.
+private struct SliderSpec {
+    let title: String
+    let keyPath: WritableKeyPath<PaperSettings, Double>
+    let range: ClosedRange<Double>
+    let format: (Double) -> String
+    let rerendersTile: Bool
+
+    static func percent(_ value: Double) -> String { "\(Int((value * 100).rounded()))%" }
+    static func times(_ value: Double) -> String { String(format: "%.1f×", value) }
+    static func pixels(_ value: Double) -> String { String(format: "%.1f px", value) }
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var statusItem: NSStatusItem!
     private var toggleItem: NSMenuItem!
-    private var washValueLabel: NSTextField!
-    private var grainValueLabel: NSTextField!
-    private var textureSizeSlider: NSSlider!
-    private var textureSizeValueLabel: NSTextField!
-    private var grainSizeSlider: NSSlider!
-    private var grainSizeValueLabel: NSTextField!
-    private var formationSlider: NSSlider!
-    private var formationValueLabel: NSTextField!
-    private var fibreSlider: NSSlider!
-    private var fibreValueLabel: NSTextField!
+    private var sliderRows: [(slider: NSSlider, valueLabel: NSTextField)] = []
 
     private var overlays: [OverlayWindow] = []
     private var pattern: NSImage?
@@ -28,6 +32,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let texture = PaperTexture.vellumMist
 
     private var settings = PaperSettings.load(texture: .vellumMist)
+
+    private let sliderSpecs = [
+        SliderSpec(title: "Wash", keyPath: \.wash, range: PaperSettings.washRange, format: SliderSpec.percent, rerendersTile: false),
+        SliderSpec(title: "Grain strength", keyPath: \.grain, range: PaperSettings.grainRange, format: SliderSpec.percent, rerendersTile: false),
+        SliderSpec(title: "Texture size", keyPath: \.textureSize, range: PaperSettings.textureSizeRange, format: SliderSpec.times, rerendersTile: true),
+        SliderSpec(title: "Grain size", keyPath: \.grainSize, range: PaperSettings.grainSizeRange, format: SliderSpec.pixels, rerendersTile: true),
+        SliderSpec(title: "Formation", keyPath: \.formation, range: PaperSettings.formationRange, format: SliderSpec.percent, rerendersTile: true),
+        SliderSpec(title: "Fibres", keyPath: \.fibre, range: PaperSettings.fibreRange, format: SliderSpec.percent, rerendersTile: true),
+    ]
 
     // MARK: Lifecycle
 
@@ -79,41 +92,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         toggleItem.image = Icons.symbol("power")
         menu.addItem(toggleItem)
 
-        let washRow = buildSliderRow(title: "Wash", valueText: percentString(settings.wash),
-                                     value: settings.wash, range: PaperSettings.washRange,
-                                     action: #selector(washChanged(_:)))
-        washValueLabel = washRow.valueLabel
-
-        let grainRow = buildSliderRow(title: "Grain strength", valueText: percentString(settings.grain),
-                                      value: settings.grain, range: PaperSettings.grainRange,
-                                      action: #selector(grainChanged(_:)))
-        grainValueLabel = grainRow.valueLabel
-
-        let textureSizeRow = buildSliderRow(title: "Texture size", valueText: textureSizeString(),
-                                            value: settings.textureSize, range: PaperSettings.textureSizeRange,
-                                            action: #selector(textureSizeChanged(_:)))
-        textureSizeSlider = textureSizeRow.slider
-        textureSizeValueLabel = textureSizeRow.valueLabel
-
-        let grainSizeRow = buildSliderRow(title: "Grain size", valueText: grainSizeString(),
-                                          value: settings.grainSize, range: PaperSettings.grainSizeRange,
-                                          action: #selector(grainSizeChanged(_:)))
-        grainSizeSlider = grainSizeRow.slider
-        grainSizeValueLabel = grainSizeRow.valueLabel
-
-        let formationRow = buildSliderRow(title: "Formation", valueText: percentString(settings.formation),
-                                          value: settings.formation, range: PaperSettings.formationRange,
-                                          action: #selector(formationChanged(_:)))
-        formationSlider = formationRow.slider
-        formationValueLabel = formationRow.valueLabel
-
-        let fibreRow = buildSliderRow(title: "Fibres", valueText: percentString(settings.fibre),
-                                      value: settings.fibre, range: PaperSettings.fibreRange,
-                                      action: #selector(fibreChanged(_:)))
-        fibreSlider = fibreRow.slider
-        fibreValueLabel = fibreRow.valueLabel
-
-        for row in [washRow, grainRow, textureSizeRow, grainSizeRow, formationRow, fibreRow] {
+        for (index, spec) in sliderSpecs.enumerated() {
+            let row = buildSliderRow(spec, tag: index)
+            sliderRows.append((row.slider, row.valueLabel))
             let item = NSMenuItem()
             item.view = row.view
             menu.addItem(item)
@@ -134,33 +115,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return menu
     }
 
-    private func percentString(_ value: Double) -> String {
-        "\(Int((value * 100).rounded()))%"
-    }
-
-    private func textureSizeString() -> String {
-        String(format: "%.1f×", settings.textureSize)
-    }
-
-    private func grainSizeString() -> String {
-        String(format: "%.1f px", settings.grainSize)
-    }
-
-    private func buildSliderRow(title: String,
-                                valueText: String,
-                                value: Double,
-                                range: ClosedRange<Double>,
-                                action: Selector) -> (view: NSView, slider: NSSlider, valueLabel: NSTextField) {
+    private func buildSliderRow(_ spec: SliderSpec, tag: Int) -> (view: NSView, slider: NSSlider, valueLabel: NSTextField) {
+        let value = settings[keyPath: spec.keyPath]
         let width: CGFloat = 244
         let container = NSView(frame: NSRect(x: 0, y: 0, width: width, height: 56))
 
-        let titleLabel = NSTextField(labelWithString: title)
+        let titleLabel = NSTextField(labelWithString: spec.title)
         titleLabel.font = NSFont.systemFont(ofSize: 12, weight: .medium)
         titleLabel.textColor = .labelColor
         titleLabel.frame = NSRect(x: 14, y: 33, width: 120, height: 16)
         container.addSubview(titleLabel)
 
-        let valueLabel = NSTextField(labelWithString: valueText)
+        let valueLabel = NSTextField(labelWithString: spec.format(value))
         valueLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .regular)
         valueLabel.textColor = .secondaryLabelColor
         valueLabel.alignment = .right
@@ -168,10 +134,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         container.addSubview(valueLabel)
 
         let rowSlider = NSSlider(value: value,
-                                 minValue: range.lowerBound,
-                                 maxValue: range.upperBound,
+                                 minValue: spec.range.lowerBound,
+                                 maxValue: spec.range.upperBound,
                                  target: self,
-                                 action: action)
+                                 action: #selector(sliderChanged(_:)))
+        rowSlider.tag = tag
         rowSlider.isContinuous = true
         rowSlider.controlSize = .small
         rowSlider.frame = NSRect(x: 14, y: 9, width: width - 28, height: 20)
@@ -190,42 +157,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         overlays.forEach { $0.setVisible(settings.enabled) }
     }
 
-    @objc private func washChanged(_ sender: NSSlider) {
-        settings.wash = sender.doubleValue
-        washValueLabel?.stringValue = percentString(settings.wash)
-        settings.save()
-        applyToAll()
-    }
-
-    @objc private func grainChanged(_ sender: NSSlider) {
-        settings.grain = sender.doubleValue
-        grainValueLabel?.stringValue = percentString(settings.grain)
-        settings.save()
-        applyToAll()
-    }
-
-    @objc private func textureSizeChanged(_ sender: NSSlider) {
-        settings.textureSize = sender.doubleValue
-        textureSizeValueLabel?.stringValue = textureSizeString()
-        textureShapeChanged()
-    }
-
-    @objc private func grainSizeChanged(_ sender: NSSlider) {
-        settings.grainSize = sender.doubleValue
-        grainSizeValueLabel?.stringValue = grainSizeString()
-        textureShapeChanged()
-    }
-
-    @objc private func formationChanged(_ sender: NSSlider) {
-        settings.formation = sender.doubleValue
-        formationValueLabel?.stringValue = percentString(settings.formation)
-        textureShapeChanged()
-    }
-
-    @objc private func fibreChanged(_ sender: NSSlider) {
-        settings.fibre = sender.doubleValue
-        fibreValueLabel?.stringValue = percentString(settings.fibre)
-        textureShapeChanged()
+    @objc private func sliderChanged(_ sender: NSSlider) {
+        let spec = sliderSpecs[sender.tag]
+        settings[keyPath: spec.keyPath] = sender.doubleValue
+        sliderRows[sender.tag].valueLabel.stringValue = spec.format(sender.doubleValue)
+        if spec.rerendersTile {
+            textureShapeChanged()
+        } else {
+            settings.save()
+            applyToAll()
+        }
     }
 
     private func textureShapeChanged() {
@@ -238,14 +179,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func resetTexture() {
         settings.resetTexture(to: texture)
-        textureSizeSlider.doubleValue = settings.textureSize
-        grainSizeSlider.doubleValue = settings.grainSize
-        textureSizeValueLabel.stringValue = textureSizeString()
-        grainSizeValueLabel.stringValue = grainSizeString()
-        formationSlider.doubleValue = settings.formation
-        fibreSlider.doubleValue = settings.fibre
-        formationValueLabel.stringValue = percentString(settings.formation)
-        fibreValueLabel.stringValue = percentString(settings.fibre)
+        for (spec, row) in zip(sliderSpecs, sliderRows) {
+            let value = settings[keyPath: spec.keyPath]
+            row.slider.doubleValue = value
+            row.valueLabel.stringValue = spec.format(value)
+        }
         settings.save()
         renderPattern()
         applyToAll()
