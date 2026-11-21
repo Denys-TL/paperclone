@@ -6,11 +6,11 @@ struct PaperSettings {
     var enabled = true
     var paper = PaperTexture.vellum   // working copy; Advanced edits change it in place
     var strength = 1.0                // multiplies the paper's wash and grain
-    var coarseness = 1.0              // multiplies grain size, fibre length and formation scale
+    var zoom = 1.0                    // enlarges or shrinks the whole pattern
     var savedPapers: [PaperTexture] = []
 
     static let strengthRange = 0.0...2.0
-    static let coarsenessRange = 0.5...2.0
+    static let zoomRange = 0.25...4.0
     static let minGrainSize = 1.5
 
     var allPapers: [PaperTexture] { PaperTexture.builtIn + savedPapers }
@@ -20,14 +20,14 @@ struct PaperSettings {
 
     var isEdited: Bool { original != paper }
 
-    /// The paper as drawn: the working copy with strength and coarseness applied.
+    /// The paper as drawn: the working copy with strength and zoom applied.
     var effectivePaper: PaperTexture {
         var drawn = paper
         drawn.wash = min(1, paper.wash * strength)
         drawn.grain = min(1, paper.grain * strength)
-        drawn.grainSize = max(Self.minGrainSize, paper.grainSize * coarseness)
-        drawn.fibreLength = paper.fibreLength * coarseness
-        drawn.formationScale = paper.formationScale * coarseness
+        drawn.grainSize = max(Self.minGrainSize, paper.grainSize * zoom)
+        drawn.fibreLength = paper.fibreLength * zoom
+        drawn.formationScale = paper.formationScale * zoom
         return drawn
     }
 
@@ -56,7 +56,7 @@ struct PaperSettings {
             return min(max(value, range.lowerBound), range.upperBound)
         }
         settings.strength = stored("strength", fallback: settings.strength, in: strengthRange)
-        settings.coarseness = stored("coarseness", fallback: settings.coarseness, in: coarsenessRange)
+        settings.zoom = stored("zoom", fallback: settings.zoom, in: zoomRange)
 
         let decoder = JSONDecoder()
         if let data = defaults.data(forKey: "paper"), let paper = try? decoder.decode(PaperTexture.self, from: data) {
@@ -72,7 +72,7 @@ struct PaperSettings {
         let encoder = JSONEncoder()
         defaults.set(enabled, forKey: "enabled")
         defaults.set(strength, forKey: "strength")
-        defaults.set(coarseness, forKey: "coarseness")
+        defaults.set(zoom, forKey: "zoom")
         defaults.set(try? encoder.encode(paper), forKey: "paper")
         defaults.set(try? encoder.encode(savedPapers), forKey: "savedPapers")
     }

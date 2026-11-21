@@ -81,18 +81,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.refresh()
         }
 
-        let coarseness = SliderRow(title: "Coarseness", value: settings.coarseness,
-                                   range: PaperSettings.coarsenessRange, logarithmic: true,
+        let zoom = SliderRow(title: "Zoom", value: settings.zoom,
+                                   range: PaperSettings.zoomRange, logarithmic: true,
                                    width: width, format: SliderRow.times)
-        coarseness.onChange = { [weak self] value, dragging in
+        zoom.onChange = { [weak self] value, dragging in
             guard let self else { return }
-            self.settings.coarseness = value
+            self.settings.zoom = value
             if dragging { return }   // the tile re-renders on release
             self.settings.save()
             self.refresh()
         }
 
-        for row in [strength, coarseness] {
+        for row in [strength, zoom] {
             let item = NSMenuItem()
             item.view = row
             menu.addItem(item)
@@ -233,7 +233,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func refresh(deferRender: Bool = false) {
         let paper = settings.effectivePaper
         if paper.renderKey != renderedKey && !deferRender {
-            pattern = PaperTextureRenderer.tile(for: paper, pixelEdge: tilePixelEdge)   // render once, share across displays
+            pattern = PaperTextureRenderer.tile(for: paper, zoom: settings.zoom, pixelEdge: tilePixelEdge)   // render once, share across displays
             renderedKey = paper.renderKey
         }
         guard let pattern else { return }
