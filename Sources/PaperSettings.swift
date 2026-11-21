@@ -39,6 +39,14 @@ struct PaperSettings {
         savedPapers.append(paper)
     }
 
+    var isSavedPaper: Bool { savedPapers.contains { $0.name == paper.name } }
+
+    /// Removes the current paper from the saved list and falls back to a built-in.
+    mutating func deleteSavedPaper() {
+        savedPapers.removeAll { $0.name == paper.name }
+        paper = .vellum
+    }
+
     static func load(from defaults: UserDefaults = .standard) -> PaperSettings {
         var settings = PaperSettings()
         if defaults.object(forKey: "enabled") != nil { settings.enabled = defaults.bool(forKey: "enabled") }

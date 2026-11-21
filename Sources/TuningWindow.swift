@@ -14,9 +14,11 @@ final class TuningWindow: NSPanel {
     var onEdit: ((PaperTexture, Bool) -> Void)?
     var onRevert: (() -> Void)?
     var onSaveAs: ((String) -> Void)?
+    var onDelete: (() -> Void)?
 
     private var paper: PaperTexture
     private var rows: [(row: SliderRow, keyPath: WritableKeyPath<PaperTexture, Double>)] = []
+    private var deleteButton: NSButton!
 
     init(paper: PaperTexture) {
         self.paper = paper
@@ -91,12 +93,18 @@ final class TuningWindow: NSPanel {
         let revert = NSButton(title: "Revert", target: self, action: #selector(revert))
         revert.frame = NSRect(x: width - 14 - 140 - 8 - 90, y: buttonsTop, width: 90, height: 28)
         content.addSubview(revert)
+
+        deleteButton = NSButton(title: "Delete Paper…", target: self, action: #selector(deletePaper))
+        deleteButton.frame = NSRect(x: 14, y: buttonsTop, width: 130, height: 28)
+        content.addSubview(deleteButton)
     }
 
-    /// Show `paper` in the sliders, e.g. after another paper was picked.
-    func sync(paper: PaperTexture, title: String) {
+    /// Show `paper` in the sliders, e.g. after another paper was picked. Only
+    /// papers the user saved can be deleted.
+    func sync(paper: PaperTexture, title: String, canDelete: Bool) {
         self.paper = paper
         self.title = title
+        deleteButton.isEnabled = canDelete
         for (row, keyPath) in rows {
             row.value = paper[keyPath: keyPath]
         }
@@ -104,6 +112,16 @@ final class TuningWindow: NSPanel {
 
     @objc private func revert() {
         onRevert?()
+    }
+
+    @objc private func deletePaper() {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Delete “\(paper.name)”?"
+        alert.informativeText = "This saved paper is removed from the Paper menu. This cannot be undone."
+        alert.addButton(withTitle: "Delete")
+        alert.addButton(withTitle: "Cancel")
+        if alert.runModal() == .alertFirstButtonReturn { onDelete?() }
     }
 
     @objc private func saveAs() {

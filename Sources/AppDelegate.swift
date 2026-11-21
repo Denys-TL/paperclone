@@ -167,7 +167,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func paperChanged() {
         settings.save()
         rebuildPaperMenu()
-        tuningWindow?.sync(paper: settings.paper, title: paperTitle)
+        tuningWindow?.sync(paper: settings.paper, title: paperTitle, canDelete: settings.isSavedPaper)
         refresh()
     }
 
@@ -192,10 +192,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.settings.savePaper(as: name)
                 self.paperChanged()
             }
+            window.onDelete = { [weak self] in
+                guard let self else { return }
+                self.settings.deleteSavedPaper()
+                self.paperChanged()
+            }
             window.center()
             tuningWindow = window
         }
-        tuningWindow?.sync(paper: settings.paper, title: paperTitle)
+        tuningWindow?.sync(paper: settings.paper, title: paperTitle, canDelete: settings.isSavedPaper)
         NSApp.activate(ignoringOtherApps: true)
         tuningWindow?.makeKeyAndOrderFront(nil)
     }

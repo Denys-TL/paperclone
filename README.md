@@ -49,7 +49,7 @@ Click the 📄 menu-bar icon:
 - **Paper** — pick a kind of paper: Printer, Vellum, Newsprint, Watercolour, Kraft, or one you saved
 - **Strength** — how much paper effect; scales the paper's wash and grain together
 - **Coarseness** — fine to rough; scales grain, fibres and formation together
-- **Advanced…** — every value of the current paper, with a swatch strip to judge it on dark, mid, coloured and light content. **Save as Paper…** adds the result to the Paper menu
+- **Advanced…** — every value of the current paper, with a swatch strip to judge it on dark, mid, coloured and light content. **Save as Paper…** adds the result to the Paper menu; **Delete Paper…** removes a saved one
 - **Quit PaperClone** — exit
 
 Your choices are remembered between launches.
