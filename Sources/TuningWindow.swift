@@ -19,6 +19,7 @@ final class TuningWindow: NSPanel {
     private var paper: PaperTexture
     private var rows: [(row: SliderRow, keyPath: WritableKeyPath<PaperTexture, Double>)] = []
     private var deleteButton: NSButton!
+    private let colourWell = NSColorWell()
 
     init(paper: PaperTexture) {
         self.paper = paper
@@ -36,7 +37,8 @@ final class TuningWindow: NSPanel {
         let width: CGFloat = 440
         let stripTop: CGFloat = 14
         let stripHeight: CGFloat = 56
-        let rowsTop = stripTop + stripHeight + 30
+        let colourTop = stripTop + stripHeight + 30
+        let rowsTop = colourTop + 36
         let buttonsTop = rowsTop + CGFloat(sliders.count) * SliderRow.height + 8
         let height = buttonsTop + 28 + 16
 
@@ -72,6 +74,16 @@ final class TuningWindow: NSPanel {
         caption.frame = NSRect(x: 14, y: stripTop + stripHeight + 4, width: width - 28, height: 14)
         content.addSubview(caption)
 
+        let colourLabel = NSTextField(labelWithString: "Paper colour")
+        colourLabel.font = NSFont.systemFont(ofSize: 12, weight: .medium)
+        colourLabel.frame = NSRect(x: 14, y: colourTop + 6, width: 140, height: 16)
+        content.addSubview(colourLabel)
+
+        colourWell.frame = NSRect(x: width - 14 - 60, y: colourTop, width: 60, height: 28)
+        colourWell.target = self
+        colourWell.action = #selector(colourChanged)
+        content.addSubview(colourWell)
+
         for (index, slider) in sliders.enumerated() {
             let (title, keyPath, range, logarithmic, format) = slider
             let row = SliderRow(title: title, value: paper[keyPath: keyPath], range: range,
@@ -105,9 +117,19 @@ final class TuningWindow: NSPanel {
         self.paper = paper
         self.title = title
         deleteButton.isEnabled = canDelete
+        colourWell.color = NSColor(srgbRed: CGFloat(paper.tintR) / 255, green: CGFloat(paper.tintG) / 255,
+                                   blue: CGFloat(paper.tintB) / 255, alpha: 1)
         for (row, keyPath) in rows {
             row.value = paper[keyPath: keyPath]
         }
+    }
+
+    @objc private func colourChanged() {
+        guard let colour = colourWell.color.usingColorSpace(.sRGB) else { return }
+        paper.tintR = Int((colour.redComponent * 255).rounded())
+        paper.tintG = Int((colour.greenComponent * 255).rounded())
+        paper.tintB = Int((colour.blueComponent * 255).rounded())
+        onEdit?(paper, false)
     }
 
     @objc private func revert() {

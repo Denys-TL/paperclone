@@ -92,7 +92,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.refresh()
         }
 
-        for row in [strength, zoom] {
+        let light = SliderRow(title: "Ambient light", value: settings.ambientLight,
+                              range: PaperSettings.ambientLightRange, width: width, format: SliderRow.percent)
+        light.onChange = { [weak self] value, _ in
+            guard let self else { return }
+            self.settings.ambientLight = value
+            self.settings.save()
+            self.refresh()
+        }
+
+        for row in [strength, zoom, light] {
             let item = NSMenuItem()
             item.view = row
             menu.addItem(item)
@@ -238,7 +247,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         guard let pattern else { return }
         for overlay in overlays {
-            overlay.apply(patternImage: pattern, paper: paper)
+            overlay.apply(patternImage: pattern, paper: paper, ambientLight: settings.ambientLight)
             overlay.setVisible(settings.enabled)
         }
     }

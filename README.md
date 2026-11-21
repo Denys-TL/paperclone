@@ -48,6 +48,7 @@ Click the 📄 menu-bar icon:
 - **Enabled** — toggle the overlay on/off (the icon shows a slash when off)
 - **Paper** — pick a kind of paper: Printer, Vellum, Newsprint, Watercolour, Kraft, or one you saved
 - **Strength** — how much paper effect; scales the paper's wash and grain together
+- **Ambient light** — soft uneven light across the sheet, brightest upper left
 - **Zoom** — enlarges or shrinks the whole pattern: grain, fibres and formation together
 - **Advanced…** — every value of the current paper, with a swatch strip to judge it on dark, mid, coloured and light content. **Save as Paper…** adds the result to the Paper menu; **Delete Paper…** removes a saved one
 - **Quit PaperClone** — exit

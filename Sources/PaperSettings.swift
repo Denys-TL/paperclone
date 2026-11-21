@@ -7,10 +7,12 @@ struct PaperSettings {
     var paper = PaperTexture.vellum   // working copy; Advanced edits change it in place
     var strength = 1.0                // multiplies the paper's wash and grain
     var zoom = 1.0                    // enlarges or shrinks the whole pattern
+    var ambientLight = 0.3            // 0...1 unevenness of the light falling on the sheet
     var savedPapers: [PaperTexture] = []
 
     static let strengthRange = 0.0...2.0
     static let zoomRange = 0.25...4.0
+    static let ambientLightRange = 0.0...1.0
     static let minGrainSize = 1.5
 
     var allPapers: [PaperTexture] { PaperTexture.builtIn + savedPapers }
@@ -23,6 +25,11 @@ struct PaperSettings {
     /// The paper as drawn: the working copy with strength and zoom applied.
     var effectivePaper: PaperTexture {
         var drawn = paper
+        // Strength also sets how far white is toned toward the paper colour.
+        func toned(_ channel: Int) -> Int { max(0, 255 - Int((Double(255 - channel) * strength).rounded())) }
+        drawn.tintR = toned(paper.tintR)
+        drawn.tintG = toned(paper.tintG)
+        drawn.tintB = toned(paper.tintB)
         drawn.wash = min(1, paper.wash * strength)
         drawn.grain = min(1, paper.grain * strength)
         drawn.grainSize = max(Self.minGrainSize, paper.grainSize * zoom)
@@ -57,6 +64,7 @@ struct PaperSettings {
         }
         settings.strength = stored("strength", fallback: settings.strength, in: strengthRange)
         settings.zoom = stored("zoom", fallback: settings.zoom, in: zoomRange)
+        settings.ambientLight = stored("ambientLight", fallback: settings.ambientLight, in: ambientLightRange)
 
         let decoder = JSONDecoder()
         if let data = defaults.data(forKey: "paper"), let paper = try? decoder.decode(PaperTexture.self, from: data) {
@@ -73,6 +81,7 @@ struct PaperSettings {
         defaults.set(enabled, forKey: "enabled")
         defaults.set(strength, forKey: "strength")
         defaults.set(zoom, forKey: "zoom")
+        defaults.set(ambientLight, forKey: "ambientLight")
         defaults.set(try? encoder.encode(paper), forKey: "paper")
         defaults.set(try? encoder.encode(savedPapers), forKey: "savedPapers")
     }
