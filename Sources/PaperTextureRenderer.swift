@@ -1,9 +1,10 @@
 import AppKit
 
 /// Renders a paper-texture preset into a small, seamlessly-tiling `NSImage`
-/// entirely on the CPU — no WebKit. Three independent layers are summed: tooth
-/// (fine fractal value-noise), formation (broad cloudy noise) and fibres
-/// (stroked strands). The sum is baked as light and dark specks in the tile's alpha channel, so it textures
+/// entirely on the CPU — no WebKit. Three layers are combined: tooth (fine
+/// fractal value-noise), fibres (stroked strands) and formation (warped clumps
+/// that make the other two denser or sparser). The result is baked as light
+/// and dark specks in the tile's alpha channel, so it textures
 /// what is behind it without veiling it (the wash is a separate layer). Because the
 /// overlay is static, this runs only when the settings change (a few ms), so
 /// there's no per-frame cost and no helper processes.
@@ -41,6 +42,9 @@ enum PaperTextureRenderer {
 
         let formationCells = max(2, Int((Double(n) / texture.formationScale).rounded()))
         let formation = settings.formation
+        // Formation is low-frequency, so a quarter-resolution map is enough.
+        let mapEdge = max(2, n / 4)
+        let clumps = formation > 0 ? formationMap(edge: mapEdge, cells: formationCells, seed: texture.seed) : []
         let fibre = settings.fibre
         let fibres = fibre > 0 ? fibreLayer(edge: n, length: texture.fibreLength, seed: texture.seed) : []
 
@@ -61,13 +65,13 @@ enum PaperTextureRenderer {
                 }
                 val /= ampSum                              // normalise to [0,1]
                 var signed = 2.0 * val - 1.0               // <0 dark speck, >0 light speck
-                if formation > 0 {
-                    let cloud = (2.0 * valueNoise(u, v, cells: formationCells, seed: texture.seed &+ 101)
-                                 + valueNoise(u, v, cells: formationCells * 2, seed: texture.seed &+ 102)) / 3.0
-                    signed += formation * (2.0 * cloud - 1.0)
-                }
                 if fibre > 0 {
                     signed += fibre * (Double(fibres[y * n + x]) - 128.0) / 127.0
+                }
+                if formation > 0 {
+                    // Mostly denser/sparser texture, only faintly lighter/darker.
+                    let clump = formation * sample(clumps, edge: mapEdge, u, v)
+                    signed = signed * (1.0 + 0.8 * clump) + 0.2 * clump
                 }
                 signed = max(-1.0, min(1.0, signed))
                 let alpha = channel(grainDepth * abs(signed))
@@ -188,6 +192,51 @@ enum PaperTextureRenderer {
 
         let a = v00 + (v10 - v00) * tx
         let b = v01 + (v11 - v01) * tx
+        return a + (b - a) * ty
+    }
+
+    /// Flocculent clumps in [-1,1]: four octaves looked up at a warped position,
+    /// so clumps are ragged and mixed in size instead of round lattice blobs.
+    private static func formationNoise(_ u: Double, _ v: Double, cells: Int, seed: Int) -> Double {
+        let warpCells = max(2, cells / 2)
+        let reach = 3.0 / Double(cells)
+        var wu = u + reach * (valueNoise(u, v, cells: warpCells, seed: seed &+ 201) - 0.5)
+        var wv = v + reach * (valueNoise(u, v, cells: warpCells, seed: seed &+ 202) - 0.5)
+        wu -= wu.rounded(.down)                            // wrap so the tile stays seamless
+        wv -= wv.rounded(.down)
+
+        var sum = 0.0, total = 0.0, amp = 1.0, octaveCells = cells
+        for octave in 0..<4 {
+            sum += amp * valueNoise(wu, wv, cells: octaveCells, seed: seed &+ 101 &+ octave)
+            total += amp
+            amp *= 0.5
+            octaveCells *= 2
+        }
+        return max(-1.0, min(1.0, (2.0 * sum / total - 1.0) * 1.6))
+    }
+
+    private static func formationMap(edge m: Int, cells: Int, seed: Int) -> [Double] {
+        var map = [Double](repeating: 0, count: m * m)
+        map.withUnsafeMutableBufferPointer { buffer in
+            let map = buffer
+            DispatchQueue.concurrentPerform(iterations: m) { y in
+                let v = Double(y) / Double(m)
+                for x in 0..<m {
+                    map[y * m + x] = formationNoise(Double(x) / Double(m), v, cells: cells, seed: seed)
+                }
+            }
+        }
+        return map
+    }
+
+    /// Bilinear lookup into an `m`×`m` map that wraps at the edges.
+    private static func sample(_ map: [Double], edge m: Int, _ u: Double, _ v: Double) -> Double {
+        let fx = u * Double(m), fy = v * Double(m)
+        let x0 = Int(fx) % m, y0 = Int(fy) % m
+        let x1 = (x0 + 1) % m, y1 = (y0 + 1) % m
+        let tx = fx - fx.rounded(.down), ty = fy - fy.rounded(.down)
+        let a = map[y0 * m + x0] + (map[y0 * m + x1] - map[y0 * m + x0]) * tx
+        let b = map[y1 * m + x0] + (map[y1 * m + x1] - map[y1 * m + x0]) * tx
         return a + (b - a) * ty
     }
 
