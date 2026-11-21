@@ -41,8 +41,9 @@ final class OverlayWindow: NSWindow {
         // Click-through: events fall through to the apps beneath us.
         ignoresMouseEvents = true
 
-        // Float above everything, on every Space, including over full-screen apps.
-        level = .screenSaver
+        // Above every app window on every Space, but just under the menu bar, so the
+        // bar, its menus and system overlays draw over the paper.
+        level = NSWindow.Level(rawValue: NSWindow.Level.mainMenu.rawValue - 1)
         collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
 
         setFrame(screen.frame, display: true)
@@ -59,17 +60,15 @@ final class OverlayWindow: NSWindow {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 
-    /// Paint `patternImage` over a wash of the texture's tint. Wash and grain are
+    /// Paint `patternImage` over a wash of the paper's tint. Wash and grain are
     /// both instant: the tile is pre-rendered, and each is just a layer alpha.
-    func apply(patternImage: NSImage, texture: PaperTexture, settings: PaperSettings) {
-        washView.layer?.backgroundColor = NSColor(srgbRed: CGFloat(texture.tintR) / 255,
-                                                  green: CGFloat(texture.tintG) / 255,
-                                                  blue: CGFloat(texture.tintB) / 255,
-                                                  alpha: CGFloat(settings.wash)).cgColor
+    func apply(patternImage: NSImage, paper: PaperTexture) {
+        washView.layer?.backgroundColor = NSColor(srgbRed: CGFloat(paper.tintR) / 255,
+                                                  green: CGFloat(paper.tintG) / 255,
+                                                  blue: CGFloat(paper.tintB) / 255,
+                                                  alpha: CGFloat(paper.wash)).cgColor
         textureView.patternImage = patternImage
-        textureView.alphaValue = CGFloat(settings.grain)
-        // Just under the menu bar, its menus and system overlays draw above the paper.
-        level = settings.excludeMenuBar ? NSWindow.Level(rawValue: NSWindow.Level.mainMenu.rawValue - 1) : .screenSaver
+        textureView.alphaValue = CGFloat(paper.grain)
     }
 
     func setVisible(_ visible: Bool) {

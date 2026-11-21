@@ -10,35 +10,27 @@ import AppKit
 /// there's no per-frame cost and no helper processes.
 enum PaperTextureRenderer {
 
-    /// Bitmap edge in pixels: a larger texture size means a longer repeat distance.
-    static func pixelEdge(for settings: PaperSettings) -> Int {
-        Int((320 * settings.textureSize).rounded())
-    }
-
-    /// A tileable RGBA tile for `texture`, shaped by `settings` (grain size,
-    /// texture size). `scale` maps pixels to points (2 → crisp on Retina).
-    static func tile(for texture: PaperTexture,
-                     settings: PaperSettings,
-                     scale: CGFloat = 2) -> NSImage {
-        let n = pixelEdge(for: settings)
+    /// A tileable `n`×`n` pixel RGBA tile for `paper`. `scale` maps pixels to
+    /// points (2 → crisp on Retina).
+    static func tile(for paper: PaperTexture, pixelEdge n: Int, scale: CGFloat = 2) -> NSImage {
         // Tooth is band-limited: bumps one grain size across plus a half-size band,
         // nothing finer, so it reads as a surface rather than per-pixel static.
-        let toothCells = max(2, Int((Double(n) / max(settings.grainSize, 1.0)).rounded()))
+        let toothCells = max(2, Int((Double(n) / max(paper.grainSize, 1.0)).rounded()))
 
-        let formationCells = max(2, Int((Double(n) / texture.formationScale).rounded()))
-        let formation = settings.formation
+        let formationCells = max(2, Int((Double(n) / paper.formationScale).rounded()))
+        let formation = paper.formation
         // Formation is low-frequency, so a quarter-resolution map is enough.
         let mapEdge = max(2, n / 4)
-        let clumps = formation > 0 ? formationMap(edge: mapEdge, cells: formationCells, seed: texture.seed) : []
-        let fibre = settings.fibre
-        let fibres = fibre > 0 ? fibreLayer(edge: n, length: texture.fibreLength, seed: texture.seed) : []
+        let clumps = formation > 0 ? formationMap(edge: mapEdge, cells: formationCells, seed: paper.seed) : []
+        let fibre = paper.fibre
+        let fibres = fibre > 0 ? fibreLayer(edge: n, length: paper.fibreLength, seed: paper.seed) : []
 
         // Peak speck opacity before the grain-strength setting scales it.
         let grainDepth = 0.85
         let embossGain = 0.6
         let matteGain = 0.5
-        let relief = settings.relief
-        let highlights = settings.highlights
+        let relief = paper.relief
+        let highlights = paper.highlights
         let fibreRelief = 3.0        // fibres stand this much taller than tooth
         let formationSwing = 0.4     // density varies ±40% at full formation, never to zero
         let formationShade = 0.1     // faint brightness share of formation
@@ -52,8 +44,8 @@ enum PaperTextureRenderer {
             let v = Double(y) / Double(n)
             for x in 0..<n {
                 let u = Double(x) / Double(n)
-                var height = (gradientNoise(u, v, cells: toothCells, seed: texture.seed)
-                              + 0.5 * gradientNoise(u, v, cells: toothCells * 2, seed: texture.seed &+ 1)) / 1.5
+                var height = (gradientNoise(u, v, cells: toothCells, seed: paper.seed)
+                              + 0.5 * gradientNoise(u, v, cells: toothCells * 2, seed: paper.seed &+ 1)) / 1.5
                 if fibre > 0 {
                     height += fibreRelief * fibre * (Double(fibres[y * n + x]) - 128.0) / 127.0
                 }
@@ -68,7 +60,7 @@ enum PaperTextureRenderer {
 
         // Pass 2 — shade. Embossed: light from one corner, so every bump gets a lit
         // side and a shaded side. Matte: height itself is the tone. `relief` blends them.
-        let reach = max(1, Int((settings.grainSize / 2).rounded()))
+        let reach = max(1, Int((paper.grainSize / 2).rounded()))
         var pixels = [UInt8](repeating: 0, count: n * n * 4)
         pixels.withUnsafeMutableBufferPointer { buffer in
         let pixels = buffer

@@ -1,35 +1,62 @@
 import Foundation
 
-/// The paper-texture preset the overlay uses. The grain itself is generated in
-/// `PaperTextureRenderer` from these parameters: `defaultGrainSize` (tooth
-/// bump size in pixels the app starts at), `seed` (which noise field), `tint` (paper colour the grain is multiplied over), and
-/// `defaultOpacity` (the intensity the app starts at). Paper is modelled as
-/// three layers: tooth (the fine grain above), formation (cloudy blotches
-/// `formationScale` pixels across) and fibres (strands `fibreLength` pixels long).
-struct PaperTexture {
-    let name: String
-    let defaultGrainSize: Double // pixels
-    let seed: Int
-    let tintR: Int
-    let tintG: Int
-    let tintB: Int
-    let defaultOpacity: Double   // 0...1
-    let formationScale: Double   // pixels
-    let defaultFormation: Double // 0...1
-    let fibreLength: Double      // pixels
-    let defaultFibre: Double     // 0...1
-    let defaultRelief: Double    // 0 matte ... 1 embossed
-    let defaultHighlights: Double // 0...1 share of light specks kept
-    let defaultTextureSize = 1.0 // tile edge multiplier
+/// One kind of paper: every value the renderer and overlay need. Paper is a
+/// height map of tooth (bumps `grainSize` pixels across), fibres (strands
+/// `fibreLength` pixels long) and formation (clumps `formationScale` pixels
+/// across), shaded by `relief` and `highlights`, drawn at `grain` opacity over
+/// a `wash` of the tint.
+struct PaperTexture: Codable, Equatable {
+    var name: String
+    var tintR: Int
+    var tintG: Int
+    var tintB: Int
+    var wash: Double            // 0...1 opacity of the flat tint veil
+    var grain: Double           // 0...1 opacity of the grain
+    var grainSize: Double       // pixels
+    var relief: Double          // 0 matte specks ... 1 embossed bumps
+    var highlights: Double      // 0...1 share of light specks kept
+    var formation: Double       // 0...1
+    var fibre: Double           // 0...1
+    var formationScale: Double  // pixels
+    var fibreLength: Double     // pixels
+    var seed: Int
 
-    /// The single texture the app ships: a semi-translucent haze for long
-    /// reading sessions.
-    static let vellumMist = PaperTexture(
-        name: "Vellum Mist",
-        defaultGrainSize: 2.5, seed: 8,
-        tintR: 247, tintG: 247, tintB: 249,
-        defaultOpacity: 0.12,
-        formationScale: 64, defaultFormation: 0.35,
-        fibreLength: 18, defaultFibre: 0.30,
-        defaultRelief: 0.6, defaultHighlights: 0.2)
+    /// What the rendered tile depends on; wash, grain and tint are applied by the overlay.
+    var renderKey: PaperTexture {
+        var key = self
+        key.name = ""
+        key.tintR = 0
+        key.tintG = 0
+        key.tintB = 0
+        key.wash = 0
+        key.grain = 0
+        return key
+    }
+
+    static let printer = PaperTexture(
+        name: "Printer", tintR: 250, tintG: 250, tintB: 250,
+        wash: 0.04, grain: 0.10, grainSize: 2.0, relief: 0.70, highlights: 0.15,
+        formation: 0.15, fibre: 0.05, formationScale: 80, fibreLength: 14, seed: 3)
+
+    static let vellum = PaperTexture(
+        name: "Vellum", tintR: 247, tintG: 247, tintB: 249,
+        wash: 0.06, grain: 0.12, grainSize: 2.5, relief: 0.60, highlights: 0.20,
+        formation: 0.35, fibre: 0.30, formationScale: 64, fibreLength: 18, seed: 8)
+
+    static let newsprint = PaperTexture(
+        name: "Newsprint", tintR: 226, tintG: 222, tintB: 212,
+        wash: 0.12, grain: 0.22, grainSize: 2.2, relief: 0.25, highlights: 0.15,
+        formation: 0.55, fibre: 0.45, formationScale: 48, fibreLength: 14, seed: 21)
+
+    static let watercolour = PaperTexture(
+        name: "Watercolour", tintR: 250, tintG: 246, tintB: 236,
+        wash: 0.06, grain: 0.30, grainSize: 5.0, relief: 0.90, highlights: 0.25,
+        formation: 0.50, fibre: 0.10, formationScale: 110, fibreLength: 20, seed: 34)
+
+    static let kraft = PaperTexture(
+        name: "Kraft", tintR: 196, tintG: 154, tintB: 108,
+        wash: 0.16, grain: 0.26, grainSize: 3.0, relief: 0.50, highlights: 0.20,
+        formation: 0.60, fibre: 0.80, formationScale: 56, fibreLength: 30, seed: 55)
+
+    static let builtIn = [printer, vellum, newsprint, watercolour, kraft]
 }

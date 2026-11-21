@@ -1,81 +1,71 @@
 import Foundation
 
-/// Everything the user can tune, persisted in `UserDefaults`. New knobs go
-/// here so callers keep passing one value around.
+/// Everything the user can tune, persisted in `UserDefaults`: which paper, two
+/// everyday modifiers on top of it, and the papers they have saved.
 struct PaperSettings {
     var enabled = true
-    var excludeMenuBar = true // overlay sits under the menu bar and its menus
-    var wash: Double          // 0...1 opacity of the flat paper-tint veil
-    var grain: Double         // 0...1 strength of the light/dark specks
-    var textureSize: Double   // tile edge multiplier (repeat distance)
-    var grainSize: Double     // finest speck size in pixels
-    var formation: Double     // 0...1 strength of the cloudy blotches
-    var fibre: Double         // 0...1 strength of the fibre strands
-    var relief: Double        // 0 matte specks ... 1 embossed bumps
-    var highlights: Double    // 0...1 share of light specks kept (shadows are always full)
+    var paper = PaperTexture.vellum   // working copy; Advanced edits change it in place
+    var strength = 1.0                // multiplies the paper's wash and grain
+    var coarseness = 1.0              // multiplies grain size, fibre length and formation scale
+    var savedPapers: [PaperTexture] = []
 
-    static let washRange = 0.0...0.40
-    static let grainRange = 0.0...1.0
-    static let textureSizeRange = 1.0...12.0
-    static let grainSizeRange = 1.5...12.0
-    static let formationRange = 0.0...1.0
-    static let fibreRange = 0.0...1.0
-    static let reliefRange = 0.0...1.0
-    static let highlightsRange = 0.0...1.0
+    static let strengthRange = 0.0...2.0
+    static let coarsenessRange = 0.5...2.0
+    static let minGrainSize = 1.5
 
-    init(texture: PaperTexture) {
-        wash = texture.defaultOpacity / 2
-        grain = texture.defaultOpacity
-        textureSize = texture.defaultTextureSize
-        grainSize = texture.defaultGrainSize
-        formation = texture.defaultFormation
-        fibre = texture.defaultFibre
-        relief = texture.defaultRelief
-        highlights = texture.defaultHighlights
+    var allPapers: [PaperTexture] { PaperTexture.builtIn + savedPapers }
+
+    /// The stored paper the working copy started from.
+    var original: PaperTexture? { allPapers.first { $0.name == paper.name } }
+
+    var isEdited: Bool { original != paper }
+
+    /// The paper as drawn: the working copy with strength and coarseness applied.
+    var effectivePaper: PaperTexture {
+        var drawn = paper
+        drawn.wash = min(1, paper.wash * strength)
+        drawn.grain = min(1, paper.grain * strength)
+        drawn.grainSize = max(Self.minGrainSize, paper.grainSize * coarseness)
+        drawn.fibreLength = paper.fibreLength * coarseness
+        drawn.formationScale = paper.formationScale * coarseness
+        return drawn
     }
 
-    static func load(texture: PaperTexture, from defaults: UserDefaults = .standard) -> PaperSettings {
-        var settings = PaperSettings(texture: texture)
+    /// Stores the working copy under `name`, replacing a saved paper of that name.
+    mutating func savePaper(as name: String) {
+        let taken = PaperTexture.builtIn.contains { $0.name == name }
+        paper.name = taken ? name + " (custom)" : name
+        savedPapers.removeAll { $0.name == paper.name }
+        savedPapers.append(paper)
+    }
+
+    static func load(from defaults: UserDefaults = .standard) -> PaperSettings {
+        var settings = PaperSettings()
         if defaults.object(forKey: "enabled") != nil { settings.enabled = defaults.bool(forKey: "enabled") }
-        if defaults.object(forKey: "excludeMenuBar") != nil { settings.excludeMenuBar = defaults.bool(forKey: "excludeMenuBar") }
 
         func stored(_ key: String, fallback: Double, in range: ClosedRange<Double>) -> Double {
             let value = defaults.object(forKey: key) != nil ? defaults.double(forKey: key) : fallback
             return min(max(value, range.lowerBound), range.upperBound)
         }
-        // Pre-split installs stored one "intensity"; it covered both halves.
-        let legacy = defaults.object(forKey: "intensity") != nil ? defaults.double(forKey: "intensity") / 2 : nil
-        settings.wash = stored("wash", fallback: legacy ?? settings.wash, in: washRange)
-        settings.grain = stored("grain", fallback: legacy ?? settings.grain, in: grainRange)
-        settings.textureSize = stored("textureSize", fallback: settings.textureSize, in: textureSizeRange)
-        settings.grainSize = stored("grainSize", fallback: settings.grainSize, in: grainSizeRange)
-        settings.formation = stored("formation", fallback: settings.formation, in: formationRange)
-        settings.fibre = stored("fibre", fallback: settings.fibre, in: fibreRange)
-        settings.relief = stored("relief", fallback: settings.relief, in: reliefRange)
-        settings.highlights = stored("highlights", fallback: settings.highlights, in: highlightsRange)
+        settings.strength = stored("strength", fallback: settings.strength, in: strengthRange)
+        settings.coarseness = stored("coarseness", fallback: settings.coarseness, in: coarsenessRange)
+
+        let decoder = JSONDecoder()
+        if let data = defaults.data(forKey: "paper"), let paper = try? decoder.decode(PaperTexture.self, from: data) {
+            settings.paper = paper
+        }
+        if let data = defaults.data(forKey: "savedPapers"), let papers = try? decoder.decode([PaperTexture].self, from: data) {
+            settings.savedPapers = papers
+        }
         return settings
     }
 
     func save(to defaults: UserDefaults = .standard) {
+        let encoder = JSONEncoder()
         defaults.set(enabled, forKey: "enabled")
-        defaults.set(excludeMenuBar, forKey: "excludeMenuBar")
-        defaults.set(wash, forKey: "wash")
-        defaults.set(grain, forKey: "grain")
-        defaults.set(textureSize, forKey: "textureSize")
-        defaults.set(grainSize, forKey: "grainSize")
-        defaults.set(formation, forKey: "formation")
-        defaults.set(fibre, forKey: "fibre")
-        defaults.set(relief, forKey: "relief")
-        defaults.set(highlights, forKey: "highlights")
-    }
-
-    /// Restores the texture-shape knobs to the preset, keeping enabled/wash/grain.
-    mutating func resetTexture(to texture: PaperTexture) {
-        textureSize = texture.defaultTextureSize
-        grainSize = texture.defaultGrainSize
-        formation = texture.defaultFormation
-        fibre = texture.defaultFibre
-        relief = texture.defaultRelief
-        highlights = texture.defaultHighlights
+        defaults.set(strength, forKey: "strength")
+        defaults.set(coarseness, forKey: "coarseness")
+        defaults.set(try? encoder.encode(paper), forKey: "paper")
+        defaults.set(try? encoder.encode(savedPapers), forKey: "savedPapers")
     }
 }
