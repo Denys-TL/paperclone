@@ -14,12 +14,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var textureSizeValueLabel: NSTextField!
     private var grainSizeSlider: NSSlider!
     private var grainSizeValueLabel: NSTextField!
+    private var formationSlider: NSSlider!
+    private var formationValueLabel: NSTextField!
+    private var fibreSlider: NSSlider!
+    private var fibreValueLabel: NSTextField!
 
     private var overlays: [OverlayWindow] = []
     private var pattern: NSImage?
 
     // Tiles larger than this re-render on slider release instead of every drag tick.
-    private let liveRenderMaxPixelEdge = 2560
+    private let liveRenderMaxPixelEdge = 1920
 
     private let texture = PaperTexture.vellumMist
 
@@ -97,7 +101,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         grainSizeSlider = grainSizeRow.slider
         grainSizeValueLabel = grainSizeRow.valueLabel
 
-        for row in [washRow, grainRow, textureSizeRow, grainSizeRow] {
+        let formationRow = buildSliderRow(title: "Formation", valueText: percentString(settings.formation),
+                                          value: settings.formation, range: PaperSettings.formationRange,
+                                          action: #selector(formationChanged(_:)))
+        formationSlider = formationRow.slider
+        formationValueLabel = formationRow.valueLabel
+
+        let fibreRow = buildSliderRow(title: "Fibres", valueText: percentString(settings.fibre),
+                                      value: settings.fibre, range: PaperSettings.fibreRange,
+                                      action: #selector(fibreChanged(_:)))
+        fibreSlider = fibreRow.slider
+        fibreValueLabel = fibreRow.valueLabel
+
+        for row in [washRow, grainRow, textureSizeRow, grainSizeRow, formationRow, fibreRow] {
             let item = NSMenuItem()
             item.view = row.view
             menu.addItem(item)
@@ -200,6 +216,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         textureShapeChanged()
     }
 
+    @objc private func formationChanged(_ sender: NSSlider) {
+        settings.formation = sender.doubleValue
+        formationValueLabel?.stringValue = percentString(settings.formation)
+        textureShapeChanged()
+    }
+
+    @objc private func fibreChanged(_ sender: NSSlider) {
+        settings.fibre = sender.doubleValue
+        fibreValueLabel?.stringValue = percentString(settings.fibre)
+        textureShapeChanged()
+    }
+
     private func textureShapeChanged() {
         let dragging = NSApp.currentEvent?.type == .leftMouseDragged
         if dragging && PaperTextureRenderer.pixelEdge(for: settings) > liveRenderMaxPixelEdge { return }
@@ -214,6 +242,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         grainSizeSlider.doubleValue = settings.grainSize
         textureSizeValueLabel.stringValue = textureSizeString()
         grainSizeValueLabel.stringValue = grainSizeString()
+        formationSlider.doubleValue = settings.formation
+        fibreSlider.doubleValue = settings.fibre
+        formationValueLabel.stringValue = percentString(settings.formation)
+        fibreValueLabel.stringValue = percentString(settings.fibre)
         settings.save()
         renderPattern()
         applyToAll()

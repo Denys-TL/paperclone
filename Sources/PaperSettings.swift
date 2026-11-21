@@ -8,17 +8,23 @@ struct PaperSettings {
     var grain: Double         // 0...1 strength of the light/dark specks
     var textureSize: Double   // tile edge multiplier (repeat distance)
     var grainSize: Double     // finest speck size in pixels
+    var formation: Double     // 0...1 strength of the cloudy blotches
+    var fibre: Double         // 0...1 strength of the fibre strands
 
     static let washRange = 0.0...0.40
     static let grainRange = 0.0...0.50
     static let textureSizeRange = 1.0...12.0
     static let grainSizeRange = 0.9...12.0
+    static let formationRange = 0.0...1.0
+    static let fibreRange = 0.0...1.0
 
     init(texture: PaperTexture) {
         wash = texture.defaultOpacity / 2
         grain = texture.defaultOpacity / 2
         textureSize = texture.defaultTextureSize
         grainSize = texture.defaultGrainSize
+        formation = texture.defaultFormation
+        fibre = texture.defaultFibre
     }
 
     static func load(texture: PaperTexture, from defaults: UserDefaults = .standard) -> PaperSettings {
@@ -35,6 +41,8 @@ struct PaperSettings {
         settings.grain = stored("grain", fallback: legacy ?? settings.grain, in: grainRange)
         settings.textureSize = stored("textureSize", fallback: settings.textureSize, in: textureSizeRange)
         settings.grainSize = stored("grainSize", fallback: settings.grainSize, in: grainSizeRange)
+        settings.formation = stored("formation", fallback: settings.formation, in: formationRange)
+        settings.fibre = stored("fibre", fallback: settings.fibre, in: fibreRange)
         return settings
     }
 
@@ -44,11 +52,15 @@ struct PaperSettings {
         defaults.set(grain, forKey: "grain")
         defaults.set(textureSize, forKey: "textureSize")
         defaults.set(grainSize, forKey: "grainSize")
+        defaults.set(formation, forKey: "formation")
+        defaults.set(fibre, forKey: "fibre")
     }
 
     /// Restores the texture-shape knobs to the preset, keeping enabled/wash/grain.
     mutating func resetTexture(to texture: PaperTexture) {
         textureSize = texture.defaultTextureSize
         grainSize = texture.defaultGrainSize
+        formation = texture.defaultFormation
+        fibre = texture.defaultFibre
     }
 }
