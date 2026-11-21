@@ -54,6 +54,8 @@ Click the 📄 menu-bar icon:
 - **Formation** — strength of the broad cloudy blotches
 - **Fibres** — strength of the fibre strands
 - **Relief** — 0% is matte specks, 100% is embossed bumps
+- **Highlights** — how much of the light specks to keep; low keeps the grain equally strong on every colour
+- **Exclude Menu Bar** — keep the menu bar and its menus above the paper
 - **Reset Texture** — restore texture size, grain size, formation and fibres
 - **Quit PaperClone** — exit
 

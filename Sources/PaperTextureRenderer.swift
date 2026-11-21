@@ -2,7 +2,7 @@ import AppKit
 
 /// Renders a paper-texture preset into a small, seamlessly-tiling `NSImage`
 /// entirely on the CPU — no WebKit. Paper is modelled as a height map: tooth
-/// (fine fractal value-noise) plus fibres (stroked strands), made denser or
+/// (band-limited gradient noise) plus fibres (stroked strands), made denser or
 /// sparser by formation (warped clumps). The map is embossed — lit from one
 /// corner — and baked as highlights and shadows in the tile's alpha channel, so it textures
 /// what is behind it without veiling it (the wash is a separate layer). Because the
@@ -21,24 +21,9 @@ enum PaperTextureRenderer {
                      settings: PaperSettings,
                      scale: CGFloat = 2) -> NSImage {
         let n = pixelEdge(for: settings)
-        let octaves = max(1, texture.numOctaves)
-
-        // 1/grainSize ≈ cycles/pixel (SVG feTurbulence convention): it sets the
-        // FINEST grain. We build `octaves` bands from coarse → fine, each doubling
-        // in frequency and halving in amplitude, so a broad mottle dominates and
-        // fine grain rides on top — the way real paper fibre reads.
-        let finest = max(2.0, Double(n) / max(settings.grainSize, 0.1))
-        let coarsest = max(2.0, finest / pow(2.0, Double(octaves - 1)))
-
-        var cellsPer = [Int]()
-        var amps = [Double]()
-        var ampSum = 0.0
-        for o in 0..<octaves {
-            cellsPer.append(max(2, Int((coarsest * pow(2.0, Double(o))).rounded())))
-            let a = pow(0.5, Double(o))
-            amps.append(a)
-            ampSum += a
-        }
+        // Tooth is band-limited: bumps one grain size across plus a half-size band,
+        // nothing finer, so it reads as a surface rather than per-pixel static.
+        let toothCells = max(2, Int((Double(n) / max(settings.grainSize, 1.0)).rounded()))
 
         let formationCells = max(2, Int((Double(n) / texture.formationScale).rounded()))
         let formation = settings.formation
@@ -53,6 +38,7 @@ enum PaperTextureRenderer {
         let embossGain = 0.6
         let matteGain = 0.5
         let relief = settings.relief
+        let highlights = settings.highlights
         let fibreRelief = 3.0        // fibres stand this much taller than tooth
         let formationSwing = 0.4     // density varies ±40% at full formation, never to zero
         let formationShade = 0.1     // faint brightness share of formation
@@ -66,12 +52,8 @@ enum PaperTextureRenderer {
             let v = Double(y) / Double(n)
             for x in 0..<n {
                 let u = Double(x) / Double(n)
-                var val = 0.0
-                for o in 0..<octaves {
-                    val += amps[o] * valueNoise(u, v, cells: cellsPer[o], seed: texture.seed &+ o)
-                }
-                val /= ampSum                              // normalise to [0,1]
-                var height = 2.0 * val - 1.0
+                var height = (gradientNoise(u, v, cells: toothCells, seed: texture.seed)
+                              + 0.5 * gradientNoise(u, v, cells: toothCells * 2, seed: texture.seed &+ 1)) / 1.5
                 if fibre > 0 {
                     height += fibreRelief * fibre * (Double(fibres[y * n + x]) - 128.0) / 127.0
                 }
@@ -101,7 +83,9 @@ enum PaperTextureRenderer {
                         * sample(clumps, edge: mapEdge, Double(x) / Double(n), Double(y) / Double(n))
                 }
                 signed = max(-1.0, min(1.0, signed))       // <0 shaded, >0 lit
-                let alpha = channel(grainDepth * abs(signed))
+                // Shadows darken every colour by the same share; highlights only
+                // show on dark content, so they are scaled back separately.
+                let alpha = channel(grainDepth * abs(signed) * (signed > 0 ? highlights : 1.0))
                 let white = signed > 0 ? alpha : 0         // premultiplied
 
                 let idx = (y * n + x) * 4
@@ -220,6 +204,34 @@ enum PaperTextureRenderer {
         let a = v00 + (v10 - v00) * tx
         let b = v01 + (v11 - v01) * tx
         return a + (b - a) * ty
+    }
+
+    private static let gradients: [(Double, Double)] = (0..<16).map {
+        let angle = Double($0) / 16 * 2 * Double.pi
+        return (cos(angle), sin(angle))
+    }
+
+    /// Tileable gradient (Perlin) noise in roughly [-1,1]: round, evenly sized
+    /// bumps about one lattice cell across, with no blocky lattice artefacts.
+    private static func gradientNoise(_ u: Double, _ v: Double, cells: Int, seed: Int) -> Double {
+        let fx = u * Double(cells)
+        let fy = v * Double(cells)
+        let x0 = Int(fx.rounded(.down))
+        let y0 = Int(fy.rounded(.down))
+        let dx = fx - Double(x0), dy = fy - Double(y0)
+        let tx = dx * dx * dx * (dx * (dx * 6 - 15) + 10)
+        let ty = dy * dy * dy * (dy * (dy * 6 - 15) + 10)
+
+        let x0m = x0 % cells, y0m = y0 % cells
+        let x1m = (x0 + 1) % cells, y1m = (y0 + 1) % cells
+
+        func corner(_ cx: Int, _ cy: Int, _ ox: Double, _ oy: Double) -> Double {
+            let g = gradients[Int(hash(cx, cy, seed) * 16) & 15]
+            return g.0 * ox + g.1 * oy
+        }
+        let a = corner(x0m, y0m, dx, dy) + (corner(x1m, y0m, dx - 1, dy) - corner(x0m, y0m, dx, dy)) * tx
+        let b = corner(x0m, y1m, dx, dy - 1) + (corner(x1m, y1m, dx - 1, dy - 1) - corner(x0m, y1m, dx, dy - 1)) * tx
+        return (a + (b - a) * ty) * 1.5
     }
 
     /// Flocculent clumps in [-1,1]: four octaves looked up at a warped position,

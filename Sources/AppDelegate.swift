@@ -1,9 +1,5 @@
 import AppKit
 
-/// Owns the whole app: the menu-bar item + menu, the per-display overlay
-/// windows, and the current `PaperSettings`, which it persists in
-/// `UserDefaults` and fans out to every overlay. The texture is fixed to
-/// `PaperTexture.vellumMist`.
 /// One menu slider: which setting it edits, its range, and how to show it.
 private struct SliderSpec {
     let title: String
@@ -11,16 +7,35 @@ private struct SliderSpec {
     let range: ClosedRange<Double>
     let format: (Double) -> String
     let rerendersTile: Bool
+    var logarithmic = false   // equal slider travel multiplies the value instead of adding
+
+    /// Slider position in 0...1 for a setting value, and back.
+    func position(for value: Double) -> Double {
+        logarithmic
+            ? log(value / range.lowerBound) / log(range.upperBound / range.lowerBound)
+            : (value - range.lowerBound) / (range.upperBound - range.lowerBound)
+    }
+
+    func value(at position: Double) -> Double {
+        logarithmic
+            ? range.lowerBound * pow(range.upperBound / range.lowerBound, position)
+            : range.lowerBound + position * (range.upperBound - range.lowerBound)
+    }
 
     static func percent(_ value: Double) -> String { "\(Int((value * 100).rounded()))%" }
     static func times(_ value: Double) -> String { String(format: "%.1f×", value) }
     static func pixels(_ value: Double) -> String { String(format: "%.1f px", value) }
 }
 
+/// Owns the whole app: the menu-bar item + menu, the per-display overlay
+/// windows, and the current `PaperSettings`, which it persists in
+/// `UserDefaults` and fans out to every overlay. The texture is fixed to
+/// `PaperTexture.vellumMist`.
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var statusItem: NSStatusItem!
     private var toggleItem: NSMenuItem!
+    private var menuBarItem: NSMenuItem!
     private var sliderRows: [(slider: NSSlider, valueLabel: NSTextField)] = []
 
     private var overlays: [OverlayWindow] = []
@@ -36,11 +51,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let sliderSpecs = [
         SliderSpec(title: "Wash", keyPath: \.wash, range: PaperSettings.washRange, format: SliderSpec.percent, rerendersTile: false),
         SliderSpec(title: "Grain strength", keyPath: \.grain, range: PaperSettings.grainRange, format: SliderSpec.percent, rerendersTile: false),
-        SliderSpec(title: "Texture size", keyPath: \.textureSize, range: PaperSettings.textureSizeRange, format: SliderSpec.times, rerendersTile: true),
-        SliderSpec(title: "Grain size", keyPath: \.grainSize, range: PaperSettings.grainSizeRange, format: SliderSpec.pixels, rerendersTile: true),
+        SliderSpec(title: "Texture size", keyPath: \.textureSize, range: PaperSettings.textureSizeRange, format: SliderSpec.times, rerendersTile: true, logarithmic: true),
+        SliderSpec(title: "Grain size", keyPath: \.grainSize, range: PaperSettings.grainSizeRange, format: SliderSpec.pixels, rerendersTile: true, logarithmic: true),
         SliderSpec(title: "Formation", keyPath: \.formation, range: PaperSettings.formationRange, format: SliderSpec.percent, rerendersTile: true),
         SliderSpec(title: "Fibres", keyPath: \.fibre, range: PaperSettings.fibreRange, format: SliderSpec.percent, rerendersTile: true),
         SliderSpec(title: "Relief", keyPath: \.relief, range: PaperSettings.reliefRange, format: SliderSpec.percent, rerendersTile: true),
+        SliderSpec(title: "Highlights", keyPath: \.highlights, range: PaperSettings.highlightsRange, format: SliderSpec.percent, rerendersTile: true),
     ]
 
     // MARK: Lifecycle
@@ -93,6 +109,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         toggleItem.image = Icons.symbol("power")
         menu.addItem(toggleItem)
 
+        menuBarItem = NSMenuItem(title: "Exclude Menu Bar", action: #selector(toggleExcludeMenuBar), keyEquivalent: "")
+        menuBarItem.target = self
+        menuBarItem.state = settings.excludeMenuBar ? .on : .off
+        menuBarItem.image = Icons.symbol("menubar.rectangle")
+        menu.addItem(menuBarItem)
+
         for (index, spec) in sliderSpecs.enumerated() {
             let row = buildSliderRow(spec, tag: index)
             sliderRows.append((row.slider, row.valueLabel))
@@ -134,9 +156,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         valueLabel.frame = NSRect(x: width - 74, y: 33, width: 60, height: 16)
         container.addSubview(valueLabel)
 
-        let rowSlider = NSSlider(value: value,
-                                 minValue: spec.range.lowerBound,
-                                 maxValue: spec.range.upperBound,
+        let rowSlider = NSSlider(value: spec.position(for: value),
+                                 minValue: 0,
+                                 maxValue: 1,
                                  target: self,
                                  action: #selector(sliderChanged(_:)))
         rowSlider.tag = tag
@@ -158,10 +180,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         overlays.forEach { $0.setVisible(settings.enabled) }
     }
 
+    @objc private func toggleExcludeMenuBar() {
+        settings.excludeMenuBar.toggle()
+        menuBarItem.state = settings.excludeMenuBar ? .on : .off
+        settings.save()
+        applyToAll()
+    }
+
     @objc private func sliderChanged(_ sender: NSSlider) {
         let spec = sliderSpecs[sender.tag]
-        settings[keyPath: spec.keyPath] = sender.doubleValue
-        sliderRows[sender.tag].valueLabel.stringValue = spec.format(sender.doubleValue)
+        let value = spec.value(at: sender.doubleValue)
+        settings[keyPath: spec.keyPath] = value
+        sliderRows[sender.tag].valueLabel.stringValue = spec.format(value)
         if spec.rerendersTile {
             textureShapeChanged()
         } else {
@@ -182,7 +212,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settings.resetTexture(to: texture)
         for (spec, row) in zip(sliderSpecs, sliderRows) {
             let value = settings[keyPath: spec.keyPath]
-            row.slider.doubleValue = value
+            row.slider.doubleValue = spec.position(for: value)
             row.valueLabel.stringValue = spec.format(value)
         }
         settings.save()

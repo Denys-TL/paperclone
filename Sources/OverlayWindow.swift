@@ -68,6 +68,8 @@ final class OverlayWindow: NSWindow {
                                                   alpha: CGFloat(settings.wash)).cgColor
         textureView.patternImage = patternImage
         textureView.alphaValue = CGFloat(settings.grain)
+        // Just under the menu bar, its menus and system overlays draw above the paper.
+        level = settings.excludeMenuBar ? NSWindow.Level(rawValue: NSWindow.Level.mainMenu.rawValue - 1) : .screenSaver
     }
 
     func setVisible(_ visible: Bool) {
