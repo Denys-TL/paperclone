@@ -35,27 +35,27 @@ struct PaperTexture: Codable, Equatable {
 
     static let printer = PaperTexture(
         name: "Printer", tintR: 250, tintG: 250, tintB: 250,
-        wash: 0.06, grain: 0.20, grainSize: 2.0, relief: 0.70, highlights: 0.15,
+        wash: 0.06, grain: 0.20, grainSize: 2.0, relief: 0.70, highlights: 0.45,
         formation: 0.15, fibre: 0.05, formationScale: 80, fibreLength: 14, seed: 3)
 
     static let vellum = PaperTexture(
         name: "Vellum", tintR: 247, tintG: 247, tintB: 249,
-        wash: 0.09, grain: 0.24, grainSize: 2.5, relief: 0.60, highlights: 0.20,
+        wash: 0.09, grain: 0.24, grainSize: 2.5, relief: 0.60, highlights: 0.50,
         formation: 0.35, fibre: 0.30, formationScale: 64, fibreLength: 18, seed: 8)
 
     static let newsprint = PaperTexture(
         name: "Newsprint", tintR: 226, tintG: 222, tintB: 212,
-        wash: 0.16, grain: 0.40, grainSize: 2.2, relief: 0.25, highlights: 0.15,
+        wash: 0.16, grain: 0.40, grainSize: 2.2, relief: 0.25, highlights: 0.45,
         formation: 0.55, fibre: 0.45, formationScale: 48, fibreLength: 14, seed: 21)
 
     static let watercolour = PaperTexture(
         name: "Watercolour", tintR: 250, tintG: 246, tintB: 236,
-        wash: 0.08, grain: 0.55, grainSize: 5.0, relief: 0.90, highlights: 0.25,
+        wash: 0.08, grain: 0.55, grainSize: 5.0, relief: 0.90, highlights: 0.55,
         formation: 0.50, fibre: 0.10, formationScale: 110, fibreLength: 20, seed: 34)
 
     static let kraft = PaperTexture(
         name: "Kraft", tintR: 196, tintG: 154, tintB: 108,
-        wash: 0.20, grain: 0.48, grainSize: 3.0, relief: 0.50, highlights: 0.20,
+        wash: 0.20, grain: 0.48, grainSize: 3.0, relief: 0.50, highlights: 0.50,
         formation: 0.60, fibre: 0.80, formationScale: 56, fibreLength: 30, seed: 55)
 
     static let builtIn = [printer, vellum, newsprint, watercolour, kraft]
