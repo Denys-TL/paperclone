@@ -53,6 +53,7 @@ Click the 📄 menu-bar icon:
 - **Grain size** — size of the finest specks
 - **Formation** — strength of the broad cloudy blotches
 - **Fibres** — strength of the fibre strands
+- **Relief** — 0% is matte specks, 100% is embossed bumps
 - **Reset Texture** — restore texture size, grain size, formation and fibres
 - **Quit PaperClone** — exit
 

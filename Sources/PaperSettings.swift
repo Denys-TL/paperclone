@@ -10,6 +10,7 @@ struct PaperSettings {
     var grainSize: Double     // finest speck size in pixels
     var formation: Double     // 0...1 strength of the cloudy blotches
     var fibre: Double         // 0...1 strength of the fibre strands
+    var relief: Double        // 0 matte specks ... 1 embossed bumps
 
     static let washRange = 0.0...0.40
     static let grainRange = 0.0...0.50
@@ -17,6 +18,7 @@ struct PaperSettings {
     static let grainSizeRange = 0.9...12.0
     static let formationRange = 0.0...1.0
     static let fibreRange = 0.0...1.0
+    static let reliefRange = 0.0...1.0
 
     init(texture: PaperTexture) {
         wash = texture.defaultOpacity / 2
@@ -25,6 +27,7 @@ struct PaperSettings {
         grainSize = texture.defaultGrainSize
         formation = texture.defaultFormation
         fibre = texture.defaultFibre
+        relief = texture.defaultRelief
     }
 
     static func load(texture: PaperTexture, from defaults: UserDefaults = .standard) -> PaperSettings {
@@ -43,6 +46,7 @@ struct PaperSettings {
         settings.grainSize = stored("grainSize", fallback: settings.grainSize, in: grainSizeRange)
         settings.formation = stored("formation", fallback: settings.formation, in: formationRange)
         settings.fibre = stored("fibre", fallback: settings.fibre, in: fibreRange)
+        settings.relief = stored("relief", fallback: settings.relief, in: reliefRange)
         return settings
     }
 
@@ -54,6 +58,7 @@ struct PaperSettings {
         defaults.set(grainSize, forKey: "grainSize")
         defaults.set(formation, forKey: "formation")
         defaults.set(fibre, forKey: "fibre")
+        defaults.set(relief, forKey: "relief")
     }
 
     /// Restores the texture-shape knobs to the preset, keeping enabled/wash/grain.
@@ -62,5 +67,6 @@ struct PaperSettings {
         grainSize = texture.defaultGrainSize
         formation = texture.defaultFormation
         fibre = texture.defaultFibre
+        relief = texture.defaultRelief
     }
 }

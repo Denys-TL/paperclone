@@ -40,6 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         SliderSpec(title: "Grain size", keyPath: \.grainSize, range: PaperSettings.grainSizeRange, format: SliderSpec.pixels, rerendersTile: true),
         SliderSpec(title: "Formation", keyPath: \.formation, range: PaperSettings.formationRange, format: SliderSpec.percent, rerendersTile: true),
         SliderSpec(title: "Fibres", keyPath: \.fibre, range: PaperSettings.fibreRange, format: SliderSpec.percent, rerendersTile: true),
+        SliderSpec(title: "Relief", keyPath: \.relief, range: PaperSettings.reliefRange, format: SliderSpec.percent, rerendersTile: true),
     ]
 
     // MARK: Lifecycle

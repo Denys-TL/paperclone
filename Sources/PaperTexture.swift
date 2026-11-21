@@ -20,6 +20,7 @@ struct PaperTexture {
     let defaultFormation: Double // 0...1
     let fibreLength: Double      // pixels
     let defaultFibre: Double     // 0...1
+    let defaultRelief: Double    // 0 matte ... 1 embossed
     let defaultTextureSize = 1.0 // tile edge multiplier
 
     /// Fine-speck size in pixels the preset starts at.
@@ -33,5 +34,6 @@ struct PaperTexture {
         tintR: 247, tintG: 247, tintB: 249,
         defaultOpacity: 0.12,
         formationScale: 64, defaultFormation: 0.35,
-        fibreLength: 18, defaultFibre: 0.30)
+        fibreLength: 18, defaultFibre: 0.30,
+        defaultRelief: 0.6)
 }

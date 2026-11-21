@@ -51,6 +51,8 @@ enum PaperTextureRenderer {
         // Peak speck opacity before the grain-strength setting scales it.
         let grainDepth = 0.85
         let embossGain = 0.6
+        let matteGain = 0.5
+        let relief = settings.relief
         let fibreRelief = 3.0        // fibres stand this much taller than tooth
         let formationSwing = 0.4     // density varies ±40% at full formation, never to zero
         let formationShade = 0.1     // faint brightness share of formation
@@ -82,8 +84,8 @@ enum PaperTextureRenderer {
         }
         let heightMap = heights
 
-        // Pass 2 — emboss: light from one corner, so every bump gets a lit side and
-        // a shaded side instead of being a flat light or dark dot.
+        // Pass 2 — shade. Embossed: light from one corner, so every bump gets a lit
+        // side and a shaded side. Matte: height itself is the tone. `relief` blends them.
         let reach = max(1, Int((settings.grainSize / 2).rounded()))
         var pixels = [UInt8](repeating: 0, count: n * n * 4)
         pixels.withUnsafeMutableBufferPointer { buffer in
@@ -91,7 +93,9 @@ enum PaperTextureRenderer {
         DispatchQueue.concurrentPerform(iterations: n) { y in
             let lit = ((y + reach) % n) * n
             for x in 0..<n {
-                var signed = embossGain * Double(heightMap[y * n + x] - heightMap[lit + (x + reach) % n])
+                let height = Double(heightMap[y * n + x])
+                let slope = height - Double(heightMap[lit + (x + reach) % n])
+                var signed = relief * embossGain * slope + (1.0 - relief) * matteGain * height
                 if formation > 0 {
                     signed += formationShade * formation
                         * sample(clumps, edge: mapEdge, Double(x) / Double(n), Double(y) / Double(n))
