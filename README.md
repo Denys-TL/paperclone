@@ -51,7 +51,12 @@ Click the 📄 menu-bar icon:
 - **Grain strength** — how visible the light/dark specks are, independent of the wash
 - **Texture size** — tile repeat distance; raise it until the repeat disappears
 - **Grain size** — size of the finest specks
-- **Reset Texture** — restore texture size and grain size
+- **Formation** — strength of the broad cloudy blotches
+- **Fibres** — strength of the fibre strands
+- **Relief** — 0% is matte specks, 100% is embossed bumps
+- **Highlights** — how much of the light specks to keep; low keeps the grain equally strong on every colour
+- **Exclude Menu Bar** — keep the menu bar and its menus above the paper
+- **Reset Texture** — restore texture size, grain size, formation and fibres
 - **Quit PaperClone** — exit
 
 Your choices are remembered between launches.
