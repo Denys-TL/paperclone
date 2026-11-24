@@ -5,7 +5,7 @@ whole screen — softening contrast and the glossy "light source" feel of the
 display. A local clone of [Paperman](https://paperman.cc/).
 
 - Transparent, **click-through** overlay (mouse/keyboard pass straight through)
-- "Vellum Mist" paper texture + intensity, texture-size and grain-size sliders
+- "Vellum Mist" paper texture + wash, grain-strength, texture-size and grain-size sliders
 - Menu-bar only — no Dock icon
 - Texture size sets the tile repeat distance — raise it until the repeat disappears
 - Multi-monitor, static texture, ~0% CPU
@@ -47,7 +47,11 @@ there is no Dock icon and no window. Click the icon for the menu.
 Click the 📄 menu-bar icon:
 
 - **Enabled** — toggle the overlay on/off (the icon shows a slash when off)
-- **Intensity** — drag the slider; the live % updates as you go
+- **Wash** — flat veil of paper tint over the screen (softens contrast)
+- **Grain strength** — how visible the light/dark specks are, independent of the wash
+- **Texture size** — tile repeat distance; raise it until the repeat disappears
+- **Grain size** — size of the finest specks
+- **Reset Texture** — restore texture size and grain size
 - **Quit PaperClone** — exit
 
 Your choices are remembered between launches.

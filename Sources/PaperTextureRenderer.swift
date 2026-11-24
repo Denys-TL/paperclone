@@ -2,7 +2,8 @@ import AppKit
 
 /// Renders a paper-texture preset into a small, seamlessly-tiling `NSImage`
 /// entirely on the CPU — no WebKit. The grain is fractal value-noise (fBm),
-/// multiplied by the preset tint and baked into an opaque bitmap. Because the
+/// baked as light and dark specks in the tile's alpha channel, so it textures
+/// what is behind it without veiling it (the wash is a separate layer). Because the
 /// overlay is static, this runs only when the settings change (a few ms), so
 /// there's no per-frame cost and no helper processes.
 enum PaperTextureRenderer {
@@ -37,12 +38,8 @@ enum PaperTextureRenderer {
             ampSum += a
         }
 
-        // How dark the fibres get relative to the paper base (0 = flat, 1 = full).
+        // Peak speck opacity before the grain-strength setting scales it.
         let grainDepth = 0.85
-
-        let tintR = Double(texture.tintR) / 255.0
-        let tintG = Double(texture.tintG) / 255.0
-        let tintB = Double(texture.tintB) / 255.0
 
         var pixels = [UInt8](repeating: 0, count: n * n * 4)
         pixels.withUnsafeMutableBufferPointer { buffer in
@@ -57,13 +54,15 @@ enum PaperTextureRenderer {
                     val += amps[o] * valueNoise(u, v, cells: cellsPer[o], seed: texture.seed &+ o)
                 }
                 val /= ampSum                              // normalise to [0,1]
-                let grain = 1.0 - grainDepth * (1.0 - val) // mostly light, darker fibres
+                let signed = 2.0 * val - 1.0               // <0 dark speck, >0 light speck
+                let alpha = channel(grainDepth * abs(signed))
+                let white = signed > 0 ? alpha : 0         // premultiplied
 
                 let idx = (y * n + x) * 4
-                pixels[idx + 0] = channel(tintR * grain)
-                pixels[idx + 1] = channel(tintG * grain)
-                pixels[idx + 2] = channel(tintB * grain)
-                pixels[idx + 3] = 255
+                pixels[idx + 0] = white
+                pixels[idx + 1] = white
+                pixels[idx + 2] = white
+                pixels[idx + 3] = alpha
             }
         }
         }

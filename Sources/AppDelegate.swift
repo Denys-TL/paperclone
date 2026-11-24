@@ -34,7 +34,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settings = PaperSettings.load(texture: .vellumMist)
 
     private let sliderSpecs = [
-        SliderSpec(title: "Intensity", keyPath: \.intensity, range: PaperSettings.intensityRange, format: SliderSpec.percent, rerendersTile: false),
+        SliderSpec(title: "Wash", keyPath: \.wash, range: PaperSettings.washRange, format: SliderSpec.percent, rerendersTile: false),
+        SliderSpec(title: "Grain strength", keyPath: \.grain, range: PaperSettings.grainRange, format: SliderSpec.percent, rerendersTile: false),
         SliderSpec(title: "Texture size", keyPath: \.textureSize, range: PaperSettings.textureSizeRange, format: SliderSpec.times, rerendersTile: true),
         SliderSpec(title: "Grain size", keyPath: \.grainSize, range: PaperSettings.grainSizeRange, format: SliderSpec.pixels, rerendersTile: true),
     ]
@@ -209,7 +210,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func applyToAll() {
         guard let pattern else { return }
         for overlay in overlays {
-            overlay.apply(patternImage: pattern, intensity: settings.intensity)
+            overlay.apply(patternImage: pattern, texture: texture, settings: settings)
             overlay.setVisible(settings.enabled)
         }
     }
