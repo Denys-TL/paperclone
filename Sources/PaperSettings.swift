@@ -54,7 +54,23 @@ struct PaperSettings {
         paper = .vellum
     }
 
+    static let storedKeys = ["enabled", "strength", "zoom", "ambientLight", "paper", "savedPapers"]
+
+    /// Copies settings saved under the app's old bundle ID (`local.paperclone`)
+    /// the first time the renamed app launches, so nobody loses their papers.
+    static func migrateLegacyDefaults(to defaults: UserDefaults = .standard, from legacyDomain: String = "local.paperclone") {
+        guard defaults.object(forKey: "migratedLegacyDefaults") == nil else { return }
+        if let legacy = UserDefaults(suiteName: legacyDomain),
+           !storedKeys.contains(where: { defaults.object(forKey: $0) != nil }) {
+            for key in storedKeys {
+                if let value = legacy.object(forKey: key) { defaults.set(value, forKey: key) }
+            }
+        }
+        defaults.set(true, forKey: "migratedLegacyDefaults")
+    }
+
     static func load(from defaults: UserDefaults = .standard) -> PaperSettings {
+        migrateLegacyDefaults(to: defaults)
         var settings = PaperSettings()
         if defaults.object(forKey: "enabled") != nil { settings.enabled = defaults.bool(forKey: "enabled") }
 

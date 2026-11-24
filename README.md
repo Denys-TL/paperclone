@@ -17,7 +17,23 @@ display. A local clone of [Paperman](https://paperman.cc/).
   works). Full Xcode is **not** required.
   Install if needed: `xcode-select --install`
 
-## Build & run
+## Install with Homebrew
+
+```bash
+brew install harris-ferguson/tap/paperclone
+paperclone                       # launches the app
+```
+
+Homebrew compiles the app on your Mac, so there is no Gatekeeper warning. To
+see it in Launchpad and Finder's Applications folder:
+
+```bash
+ln -sf "$(brew --prefix)/opt/paperclone/PaperClone.app" /Applications/
+```
+
+Upgrade with `brew upgrade paperclone`.
+
+## Build & run from source
 
 Open **Terminal** (do **not** double-click `build.sh` in Finder — macOS will
 block it with "cannot be opened because the developer cannot be verified"),
@@ -57,8 +73,9 @@ Your choices are remembered between launches.
 
 ## Launch at login (optional)
 
-System Settings → General → Login Items → **＋** → choose
-`~/Documents/PaperClone/build/PaperClone.app`.
+System Settings → General → Login Items → **＋** → choose `PaperClone.app`
+(`/Applications/PaperClone.app` if you made the Homebrew link above, otherwise
+`build/PaperClone.app` in this folder).
 
 ## Notes
 
