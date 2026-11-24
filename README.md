@@ -5,9 +5,8 @@ whole screen — softening contrast and the glossy "light source" feel of the
 display. A local clone of [Paperman](https://paperman.cc/).
 
 - Transparent, **click-through** overlay (mouse/keyboard pass straight through)
-- "Vellum Mist" paper texture + wash, grain-strength, texture-size and grain-size sliders
+- Five built-in papers, two everyday sliders, and an Advanced window for building your own
 - Menu-bar only — no Dock icon
-- Texture size sets the tile repeat distance — raise it until the repeat disappears
 - Multi-monitor, static texture, ~0% CPU
 - Native Swift/AppKit, single process, no dependencies
 
@@ -47,16 +46,11 @@ there is no Dock icon and no window. Click the icon for the menu.
 Click the 📄 menu-bar icon:
 
 - **Enabled** — toggle the overlay on/off (the icon shows a slash when off)
-- **Wash** — flat veil of paper tint over the screen (softens contrast)
-- **Grain strength** — how visible the light/dark specks are, independent of the wash
-- **Texture size** — tile repeat distance; raise it until the repeat disappears
-- **Grain size** — size of the finest specks
-- **Formation** — strength of the broad cloudy blotches
-- **Fibres** — strength of the fibre strands
-- **Relief** — 0% is matte specks, 100% is embossed bumps
-- **Highlights** — how much of the light specks to keep; low keeps the grain equally strong on every colour
-- **Exclude Menu Bar** — keep the menu bar and its menus above the paper
-- **Reset Texture** — restore texture size, grain size, formation and fibres
+- **Paper** — pick a kind of paper: Printer, Vellum, Newsprint, Watercolour, Kraft, or one you saved
+- **Strength** — how much paper effect; scales the paper's wash and grain together
+- **Ambient light** — soft uneven light across the sheet, brightest upper left
+- **Zoom** — enlarges or shrinks the whole pattern: grain, fibres and formation together
+- **Advanced…** — every value of the current paper, with a swatch strip to judge it on dark, mid, coloured and light content. **Save as Paper…** adds the result to the Paper menu; **Delete Paper…** removes a saved one
 - **Quit PaperClone** — exit
 
 Your choices are remembered between launches.
@@ -84,8 +78,10 @@ Sources/
   main.swift               app bootstrap (menu-bar-only accessory app)
   AppDelegate.swift          menu-bar item, styled menu, overlay lifecycle, prefs
   OverlayWindow.swift        transparent click-through window per display
-  PaperTexture.swift         the Vellum Mist texture parameters
-  PaperSettings.swift        user-tunable settings + UserDefaults persistence
+  PaperTexture.swift         a kind of paper + the built-in papers
+  PaperSettings.swift        current paper, strength, zoom, saved papers + persistence
+  SliderRow.swift            titled slider with live value, used by menu and Advanced window
+  TuningWindow.swift         the Advanced window
   PaperTextureRenderer.swift native fractal-noise texture generator
   Icons.swift                menu-bar icon loading + colour swatches
 Resources/

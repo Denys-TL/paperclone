@@ -10,35 +10,28 @@ import AppKit
 /// there's no per-frame cost and no helper processes.
 enum PaperTextureRenderer {
 
-    /// Bitmap edge in pixels: a larger texture size means a longer repeat distance.
-    static func pixelEdge(for settings: PaperSettings) -> Int {
-        Int((320 * settings.textureSize).rounded())
-    }
-
-    /// A tileable RGBA tile for `texture`, shaped by `settings` (grain size,
-    /// texture size). `scale` maps pixels to points (2 → crisp on Retina).
-    static func tile(for texture: PaperTexture,
-                     settings: PaperSettings,
-                     scale: CGFloat = 2) -> NSImage {
-        let n = pixelEdge(for: settings)
+    /// A tileable `n`×`n` pixel RGBA tile for `paper`. `zoom` is the factor already
+    /// applied to the paper's sizes, so fibre thickness and spacing can follow it.
+    /// `scale` maps pixels to points (2 → crisp on Retina).
+    static func tile(for paper: PaperTexture, zoom: Double, pixelEdge n: Int, scale: CGFloat = 2) -> NSImage {
         // Tooth is band-limited: bumps one grain size across plus a half-size band,
         // nothing finer, so it reads as a surface rather than per-pixel static.
-        let toothCells = max(2, Int((Double(n) / max(settings.grainSize, 1.0)).rounded()))
+        let toothCells = max(2, Int((Double(n) / max(paper.grainSize, 1.0)).rounded()))
 
-        let formationCells = max(2, Int((Double(n) / texture.formationScale).rounded()))
-        let formation = settings.formation
+        let formationCells = max(2, Int((Double(n) / paper.formationScale).rounded()))
+        let formation = paper.formation
         // Formation is low-frequency, so a quarter-resolution map is enough.
         let mapEdge = max(2, n / 4)
-        let clumps = formation > 0 ? formationMap(edge: mapEdge, cells: formationCells, seed: texture.seed) : []
-        let fibre = settings.fibre
-        let fibres = fibre > 0 ? fibreLayer(edge: n, length: texture.fibreLength, seed: texture.seed) : []
+        let clumps = formation > 0 ? formationMap(edge: mapEdge, cells: formationCells, seed: paper.seed) : []
+        let fibre = paper.fibre
+        let fibres = fibre > 0 ? fibreLayer(edge: n, length: paper.fibreLength, zoom: zoom, seed: paper.seed) : []
 
         // Peak speck opacity before the grain-strength setting scales it.
         let grainDepth = 0.85
         let embossGain = 0.6
         let matteGain = 0.5
-        let relief = settings.relief
-        let highlights = settings.highlights
+        let relief = paper.relief
+        let highlights = paper.highlights
         let fibreRelief = 3.0        // fibres stand this much taller than tooth
         let formationSwing = 0.4     // density varies ±40% at full formation, never to zero
         let formationShade = 0.1     // faint brightness share of formation
@@ -52,8 +45,8 @@ enum PaperTextureRenderer {
             let v = Double(y) / Double(n)
             for x in 0..<n {
                 let u = Double(x) / Double(n)
-                var height = (gradientNoise(u, v, cells: toothCells, seed: texture.seed)
-                              + 0.5 * gradientNoise(u, v, cells: toothCells * 2, seed: texture.seed &+ 1)) / 1.5
+                var height = (gradientNoise(u, v, cells: toothCells, seed: paper.seed)
+                              + 0.5 * gradientNoise(u, v, cells: toothCells * 2, seed: paper.seed &+ 1)) / 1.5
                 if fibre > 0 {
                     height += fibreRelief * fibre * (Double(fibres[y * n + x]) - 128.0) / 127.0
                 }
@@ -68,7 +61,7 @@ enum PaperTextureRenderer {
 
         // Pass 2 — shade. Embossed: light from one corner, so every bump gets a lit
         // side and a shaded side. Matte: height itself is the tone. `relief` blends them.
-        let reach = max(1, Int((settings.grainSize / 2).rounded()))
+        let reach = max(1, Int((paper.grainSize / 2).rounded()))
         var pixels = [UInt8](repeating: 0, count: n * n * 4)
         pixels.withUnsafeMutableBufferPointer { buffer in
         let pixels = buffer
@@ -125,8 +118,8 @@ enum PaperTextureRenderer {
     /// An `n`×`n` grey map (128 = flat) of short, randomly oriented, slightly bent
     /// strands: mostly raised (light), a few grooves (dark). Strands crossing an edge are redrawn on the
     /// opposite side, so the map tiles seamlessly.
-    private static func fibreLayer(edge n: Int, length: Double, seed: Int) -> [UInt8] {
-        if let cached = fibreCache, cached.edge == n, cached.length == length, cached.seed == seed {
+    private static func fibreLayer(edge n: Int, length: Double, zoom: Double, seed: Int) -> [UInt8] {
+        if let cached = fibreCache, cached.edge == n, cached.length == length, cached.zoom == zoom, cached.seed == seed {
             return cached.bytes
         }
         var bytes = [UInt8](repeating: 128, count: n * n)
@@ -141,7 +134,10 @@ enum PaperTextureRenderer {
             var rng = SplitMix64(state: UInt64(truncatingIfNeeded: seed) &+ 0xF1B3E5)
             let edge = Double(n)
             let reach = min(length, edge / 2)
-            for _ in 0..<(n * n / 250) {
+            // Zoomed-out fibres are also thinner and closer together; the count is
+            // capped so a very small zoom cannot stroke millions of strands.
+            let count = Int(Double(n * n / 250) * min(4.0, 1.0 / (zoom * zoom)))
+            for _ in 0..<count {
                 let x0 = rng.next() * edge
                 let y0 = rng.next() * edge
                 let angle = rng.next() * 2 * Double.pi
@@ -153,7 +149,7 @@ enum PaperTextureRenderer {
                 let cy = (y0 + y1) / 2 + bend * cos(angle)
 
                 ctx.setStrokeColor(gray: rng.next() < 0.2 ? 0 : 1, alpha: 0.25 + 0.3 * rng.next())
-                ctx.setLineWidth(1.5 + 1.5 * rng.next())
+                ctx.setLineWidth(max(0.5, (1.5 + 1.5 * rng.next()) * zoom))
 
                 let minX = min(x0, x1, cx), maxX = max(x0, x1, cx)
                 let minY = min(y0, y1, cy), maxY = max(y0, y1, cy)
@@ -167,12 +163,12 @@ enum PaperTextureRenderer {
                 }
             }
         }
-        fibreCache = (n, length, seed, bytes)
+        fibreCache = (n, length, zoom, seed, bytes)
         return bytes
     }
 
     // Stroking is the slow part and only depends on these; main-thread only.
-    private static var fibreCache: (edge: Int, length: Double, seed: Int, bytes: [UInt8])?
+    private static var fibreCache: (edge: Int, length: Double, zoom: Double, seed: Int, bytes: [UInt8])?
 
     // MARK: Noise
 

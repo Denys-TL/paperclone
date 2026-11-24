@@ -1,71 +1,27 @@
 import AppKit
 
-/// One menu slider: which setting it edits, its range, and how to show it.
-private struct SliderSpec {
-    let title: String
-    let keyPath: WritableKeyPath<PaperSettings, Double>
-    let range: ClosedRange<Double>
-    let format: (Double) -> String
-    let rerendersTile: Bool
-    var logarithmic = false   // equal slider travel multiplies the value instead of adding
-
-    /// Slider position in 0...1 for a setting value, and back.
-    func position(for value: Double) -> Double {
-        logarithmic
-            ? log(value / range.lowerBound) / log(range.upperBound / range.lowerBound)
-            : (value - range.lowerBound) / (range.upperBound - range.lowerBound)
-    }
-
-    func value(at position: Double) -> Double {
-        logarithmic
-            ? range.lowerBound * pow(range.upperBound / range.lowerBound, position)
-            : range.lowerBound + position * (range.upperBound - range.lowerBound)
-    }
-
-    static func percent(_ value: Double) -> String { "\(Int((value * 100).rounded()))%" }
-    static func times(_ value: Double) -> String { String(format: "%.1f×", value) }
-    static func pixels(_ value: Double) -> String { String(format: "%.1f px", value) }
-}
-
 /// Owns the whole app: the menu-bar item + menu, the per-display overlay
-/// windows, and the current `PaperSettings`, which it persists in
-/// `UserDefaults` and fans out to every overlay. The texture is fixed to
-/// `PaperTexture.vellumMist`.
+/// windows, the Advanced window, and the current `PaperSettings`, which it
+/// persists in `UserDefaults` and fans out to every overlay.
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var statusItem: NSStatusItem!
     private var toggleItem: NSMenuItem!
-    private var menuBarItem: NSMenuItem!
-    private var sliderRows: [(slider: NSSlider, valueLabel: NSTextField)] = []
+    private var paperItem: NSMenuItem!
+    private var tuningWindow: TuningWindow?
 
     private var overlays: [OverlayWindow] = []
     private var pattern: NSImage?
+    private var renderedKey: PaperTexture?
 
-    // Tiles larger than this re-render on slider release instead of every drag tick.
-    private let liveRenderMaxPixelEdge = 1920
-
-    private let texture = PaperTexture.vellumMist
-
-    private var settings = PaperSettings.load(texture: .vellumMist)
-
-    private let sliderSpecs = [
-        SliderSpec(title: "Wash", keyPath: \.wash, range: PaperSettings.washRange, format: SliderSpec.percent, rerendersTile: false),
-        SliderSpec(title: "Grain strength", keyPath: \.grain, range: PaperSettings.grainRange, format: SliderSpec.percent, rerendersTile: false),
-        SliderSpec(title: "Texture size", keyPath: \.textureSize, range: PaperSettings.textureSizeRange, format: SliderSpec.times, rerendersTile: true, logarithmic: true),
-        SliderSpec(title: "Grain size", keyPath: \.grainSize, range: PaperSettings.grainSizeRange, format: SliderSpec.pixels, rerendersTile: true, logarithmic: true),
-        SliderSpec(title: "Formation", keyPath: \.formation, range: PaperSettings.formationRange, format: SliderSpec.percent, rerendersTile: true),
-        SliderSpec(title: "Fibres", keyPath: \.fibre, range: PaperSettings.fibreRange, format: SliderSpec.percent, rerendersTile: true),
-        SliderSpec(title: "Relief", keyPath: \.relief, range: PaperSettings.reliefRange, format: SliderSpec.percent, rerendersTile: true),
-        SliderSpec(title: "Highlights", keyPath: \.highlights, range: PaperSettings.highlightsRange, format: SliderSpec.percent, rerendersTile: true),
-    ]
+    private var settings = PaperSettings.load()
 
     // MARK: Lifecycle
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         buildStatusItem()
         rebuildOverlays()
-        renderPattern()
-        applyToAll()
+        refresh()
 
         NotificationCenter.default.addObserver(
             self,
@@ -109,24 +65,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         toggleItem.image = Icons.symbol("power")
         menu.addItem(toggleItem)
 
-        menuBarItem = NSMenuItem(title: "Exclude Menu Bar", action: #selector(toggleExcludeMenuBar), keyEquivalent: "")
-        menuBarItem.target = self
-        menuBarItem.state = settings.excludeMenuBar ? .on : .off
-        menuBarItem.image = Icons.symbol("menubar.rectangle")
-        menu.addItem(menuBarItem)
+        paperItem = NSMenuItem()
+        paperItem.image = Icons.symbol("doc")
+        menu.addItem(paperItem)
+        rebuildPaperMenu()
 
-        for (index, spec) in sliderSpecs.enumerated() {
-            let row = buildSliderRow(spec, tag: index)
-            sliderRows.append((row.slider, row.valueLabel))
+        let width: CGFloat = 244
+
+        let strength = SliderRow(title: "Strength", value: settings.strength,
+                                 range: PaperSettings.strengthRange, width: width, format: SliderRow.percent)
+        strength.onChange = { [weak self] value, _ in
+            guard let self else { return }
+            self.settings.strength = value
+            self.settings.save()
+            self.refresh()
+        }
+
+        let zoom = SliderRow(title: "Zoom", value: settings.zoom,
+                                   range: PaperSettings.zoomRange, logarithmic: true,
+                                   width: width, format: SliderRow.times)
+        zoom.onChange = { [weak self] value, dragging in
+            guard let self else { return }
+            self.settings.zoom = value
+            if dragging { return }   // the tile re-renders on release
+            self.settings.save()
+            self.refresh()
+        }
+
+        let light = SliderRow(title: "Ambient light", value: settings.ambientLight,
+                              range: PaperSettings.ambientLightRange, width: width, format: SliderRow.percent)
+        light.onChange = { [weak self] value, _ in
+            guard let self else { return }
+            self.settings.ambientLight = value
+            self.settings.save()
+            self.refresh()
+        }
+
+        for row in [strength, zoom, light] {
             let item = NSMenuItem()
-            item.view = row.view
+            item.view = row
             menu.addItem(item)
         }
 
-        let reset = NSMenuItem(title: "Reset Texture", action: #selector(resetTexture), keyEquivalent: "")
-        reset.target = self
-        reset.image = Icons.symbol("arrow.counterclockwise")
-        menu.addItem(reset)
+        menu.addItem(.separator())
+
+        let advanced = NSMenuItem(title: "Advanced…", action: #selector(showAdvanced), keyEquivalent: "")
+        advanced.target = self
+        advanced.image = Icons.symbol("slider.horizontal.3")
+        menu.addItem(advanced)
 
         menu.addItem(.separator())
 
@@ -138,36 +124,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return menu
     }
 
-    private func buildSliderRow(_ spec: SliderSpec, tag: Int) -> (view: NSView, slider: NSSlider, valueLabel: NSTextField) {
-        let value = settings[keyPath: spec.keyPath]
-        let width: CGFloat = 244
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: width, height: 56))
+    private var paperTitle: String {
+        settings.paper.name + (settings.isEdited ? " (edited)" : "")
+    }
 
-        let titleLabel = NSTextField(labelWithString: spec.title)
-        titleLabel.font = NSFont.systemFont(ofSize: 12, weight: .medium)
-        titleLabel.textColor = .labelColor
-        titleLabel.frame = NSRect(x: 14, y: 33, width: 120, height: 16)
-        container.addSubview(titleLabel)
+    /// Built-in papers, then the user's saved ones; a tick marks the unedited current paper.
+    private func rebuildPaperMenu() {
+        paperItem.title = "Paper: " + paperTitle
 
-        let valueLabel = NSTextField(labelWithString: spec.format(value))
-        valueLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .regular)
-        valueLabel.textColor = .secondaryLabelColor
-        valueLabel.alignment = .right
-        valueLabel.frame = NSRect(x: width - 74, y: 33, width: 60, height: 16)
-        container.addSubview(valueLabel)
+        let submenu = NSMenu()
+        for (index, paper) in settings.allPapers.enumerated() {
+            if index == PaperTexture.builtIn.count { submenu.addItem(.separator()) }
+            let item = NSMenuItem(title: paper.name, action: #selector(pickPaper(_:)), keyEquivalent: "")
+            item.target = self
+            item.tag = index
+            item.state = paper == settings.paper ? .on : .off
+            item.image = swatch(for: paper)
+            submenu.addItem(item)
+        }
+        paperItem.submenu = submenu
+    }
 
-        let rowSlider = NSSlider(value: spec.position(for: value),
-                                 minValue: 0,
-                                 maxValue: 1,
-                                 target: self,
-                                 action: #selector(sliderChanged(_:)))
-        rowSlider.tag = tag
-        rowSlider.isContinuous = true
-        rowSlider.controlSize = .small
-        rowSlider.frame = NSRect(x: 14, y: 9, width: width - 28, height: 20)
-        container.addSubview(rowSlider)
-
-        return (container, rowSlider, valueLabel)
+    private func swatch(for paper: PaperTexture) -> NSImage {
+        NSImage(size: NSSize(width: 22, height: 14), flipped: false) { rect in
+            let path = NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), xRadius: 3, yRadius: 3)
+            NSColor(srgbRed: CGFloat(paper.tintR) / 255, green: CGFloat(paper.tintG) / 255,
+                    blue: CGFloat(paper.tintB) / 255, alpha: 1).setFill()
+            path.fill()
+            NSColor.separatorColor.setStroke()
+            path.stroke()
+            return true
+        }
     }
 
     // MARK: Actions
@@ -180,44 +167,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         overlays.forEach { $0.setVisible(settings.enabled) }
     }
 
-    @objc private func toggleExcludeMenuBar() {
-        settings.excludeMenuBar.toggle()
-        menuBarItem.state = settings.excludeMenuBar ? .on : .off
-        settings.save()
-        applyToAll()
+    @objc private func pickPaper(_ sender: NSMenuItem) {
+        settings.paper = settings.allPapers[sender.tag]
+        paperChanged()
     }
 
-    @objc private func sliderChanged(_ sender: NSSlider) {
-        let spec = sliderSpecs[sender.tag]
-        let value = spec.value(at: sender.doubleValue)
-        settings[keyPath: spec.keyPath] = value
-        sliderRows[sender.tag].valueLabel.stringValue = spec.format(value)
-        if spec.rerendersTile {
-            textureShapeChanged()
-        } else {
-            settings.save()
-            applyToAll()
+    /// The working paper was replaced wholesale: persist it and resync every view of it.
+    private func paperChanged() {
+        settings.save()
+        rebuildPaperMenu()
+        tuningWindow?.sync(paper: settings.paper, title: paperTitle, canDelete: settings.isSavedPaper)
+        refresh()
+    }
+
+    @objc private func showAdvanced() {
+        if tuningWindow == nil {
+            let window = TuningWindow(paper: settings.paper)
+            window.onEdit = { [weak self] paper, dragging in
+                guard let self else { return }
+                self.settings.paper = paper
+                self.rebuildPaperMenu()
+                window.title = self.paperTitle
+                if !dragging { self.settings.save() }
+                self.refresh(deferRender: dragging)
+            }
+            window.onRevert = { [weak self] in
+                guard let self, let original = self.settings.original else { return }
+                self.settings.paper = original
+                self.paperChanged()
+            }
+            window.onSaveAs = { [weak self] name in
+                guard let self else { return }
+                self.settings.savePaper(as: name)
+                self.paperChanged()
+            }
+            window.onDelete = { [weak self] in
+                guard let self else { return }
+                self.settings.deleteSavedPaper()
+                self.paperChanged()
+            }
+            window.center()
+            tuningWindow = window
         }
-    }
-
-    private func textureShapeChanged() {
-        let dragging = NSApp.currentEvent?.type == .leftMouseDragged
-        if dragging && PaperTextureRenderer.pixelEdge(for: settings) > liveRenderMaxPixelEdge { return }
-        settings.save()
-        renderPattern()
-        applyToAll()
-    }
-
-    @objc private func resetTexture() {
-        settings.resetTexture(to: texture)
-        for (spec, row) in zip(sliderSpecs, sliderRows) {
-            let value = settings[keyPath: spec.keyPath]
-            row.slider.doubleValue = spec.position(for: value)
-            row.valueLabel.stringValue = spec.format(value)
-        }
-        settings.save()
-        renderPattern()
-        applyToAll()
+        tuningWindow?.sync(paper: settings.paper, title: paperTitle, canDelete: settings.isSavedPaper)
+        NSApp.activate(ignoringOtherApps: true)
+        tuningWindow?.makeKeyAndOrderFront(nil)
     }
 
     @objc private func quit() {
@@ -226,7 +220,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func screensChanged() {
         rebuildOverlays()
-        applyToAll()
+        renderedKey = nil   // the widest screen, and so the tile size, may have changed
+        refresh()
     }
 
     // MARK: Overlays
@@ -236,14 +231,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         overlays = NSScreen.screens.map { OverlayWindow(screen: $0) }
     }
 
-    private func renderPattern() {
-        pattern = PaperTextureRenderer.tile(for: texture, settings: settings)   // render once, share across displays
+    /// One tile spans the widest screen, so the texture never visibly repeats.
+    private var tilePixelEdge: Int {
+        let widest = NSScreen.screens.map { $0.frame.width * $0.backingScaleFactor }.max() ?? 2560
+        return min(4096, Int(widest))
     }
 
-    private func applyToAll() {
+    /// Push the current settings to every overlay. The tile is re-rendered only
+    /// when something it depends on changed, and not mid-drag if `deferRender`.
+    private func refresh(deferRender: Bool = false) {
+        let paper = settings.effectivePaper
+        if paper.renderKey != renderedKey && !deferRender {
+            pattern = PaperTextureRenderer.tile(for: paper, zoom: settings.zoom, pixelEdge: tilePixelEdge)   // render once, share across displays
+            renderedKey = paper.renderKey
+        }
         guard let pattern else { return }
         for overlay in overlays {
-            overlay.apply(patternImage: pattern, texture: texture, settings: settings)
+            overlay.apply(patternImage: pattern, paper: paper, ambientLight: settings.ambientLight)
             overlay.setVisible(settings.enabled)
         }
     }
