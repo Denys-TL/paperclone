@@ -9,7 +9,7 @@
     <key>CFBundleExecutable</key>
     <string>PaperClone</string>
     <key>CFBundleIdentifier</key>
-    <string>local.paperclone</string>
+    <string>io.github.harris-ferguson.paperclone</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
